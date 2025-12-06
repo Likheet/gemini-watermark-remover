@@ -281,7 +281,8 @@ def detect_star_watermark(image):
     print(f"Searching in bottom-right region: ({roi_x},{roi_y}) to ({w},{h})")
     
     base_template = create_star_template(48)
-    scales = np.linspace(0.3, 2.0, 20)
+    # Optimized: 10 scales instead of 20 for faster detection, covering 0.3-2.0 range
+    scales = np.linspace(0.3, 2.0, 10)
     
     best_val = 0
     best_loc = None

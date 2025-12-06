@@ -1,0 +1,41 @@
+============================================================
+WATERMARK REMOVAL BENCHMARK
+============================================================
+
+Creating test image (1024x1024)...
+
+1. LOADING MODEL...
+Available ONNX providers: ['AzureExecutionProvider', 'CPUExecutionProvider']
+Using CPU for inference (GPU not available)
+Downloading MI-GAN ONNX model...
+Loading ONNX model...
+MI-GAN model loaded!
+   Model load time: 1.06s
+
+2. STAR DETECTION (ORIGINAL - 20 scales)...
+   Detection time: 0.040s, score: 0.435
+
+3. STAR DETECTION (OPTIMIZED - 8 scales)...
+   Detection time: 0.005s, score: 0.431
+   Speedup: 7.9x faster
+
+4. PREPROCESSING...
+   Preprocessing time: 0.002s
+   Padded size: (512, 512, 3)
+
+5. MI-GAN INFERENCE...
+   Run 1: 1.066s
+   Run 2: 1.073s
+   Run 3: 1.028s
+   Average inference time: 1.056s
+
+============================================================
+SUMMARY
+============================================================
+Detection (original):  0.040s
+Detection (optimized): 0.005s
+MI-GAN inference:      1.056s
+
+Total (original):   1.096s
+Total (optimized):  1.061s
+============================================================

@@ -306,12 +306,9 @@ function templateMatchNCC(roiGray, roiW, roiH, template, templateSize) {
   return { maxVal, maxLoc };
 }
 
-// Detect star watermark using template matching (ported from Python)
-
+// Detect star watermark - Exact port of main.py's detect_star_watermark
 function detectStarWatermark(imageData, width, height) {
-  console.log(`[WatermarkRemover] Image size: ${width}x${height}`);
-
-  // Convert to grayscale
+  // Convert to grayscale (matching cv2.cvtColor)
   const gray = new Uint8Array(width * height);
   for (let i = 0; i < width * height; i++) {
     const r = imageData[i * 4];
@@ -320,15 +317,13 @@ function detectStarWatermark(imageData, width, height) {
     gray[i] = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
   }
 
-  // Focus on bottom-right area
+  // ROI: Bottom-right 300x300 (matching main.py)
   const searchH = Math.min(300, Math.floor(height / 2));
   const searchW = Math.min(300, Math.floor(width / 2));
   const roiY = height - searchH;
   const roiX = width - searchW;
 
-  console.log(`[WatermarkRemover] Searching in bottom-right region: (${roiX},${roiY}) to (${width},${height})`);
-
-  // Extract ROI grayscale for faster access
+  // Extract ROI grayscale
   const roiGray = new Uint8Array(searchW * searchH);
   for (let y = 0; y < searchH; y++) {
     for (let x = 0; x < searchW; x++) {
@@ -336,24 +331,23 @@ function detectStarWatermark(imageData, width, height) {
     }
   }
 
-  // Multi-scale template matching (np.linspace(0.3, 2.0, 20))
   const baseTemplate = createStarTemplate(48);
+
+  // Scales: 10 values from 0.3 to 2.0 (matching np.linspace(0.3, 2.0, 10))
   const scales = [];
-  for (let i = 0; i < 20; i++) {
-    scales.push(0.3 + i * ((2.0 - 0.3) / 19));
+  for (let i = 0; i < 10; i++) {
+    scales.push(0.3 + i * ((2.0 - 0.3) / 9));
   }
 
-  let bestVal = -1;
+  let bestVal = 0;
   let bestLoc = null;
   let bestSize = null;
 
   for (const scale of scales) {
     const newSize = Math.round(48 * scale);
     if (newSize < 10 || newSize > Math.min(searchH, searchW)) continue;
-
     const template = resizeTemplate(baseTemplate, newSize);
     const result = templateMatchNCC(roiGray, searchW, searchH, template, newSize);
-
     if (result.maxVal > bestVal) {
       bestVal = result.maxVal;
       bestLoc = result.maxLoc;
@@ -361,39 +355,72 @@ function detectStarWatermark(imageData, width, height) {
     }
   }
 
-  console.log(`[WatermarkRemover] Template matching best score: ${bestVal.toFixed(3)}`);
+  console.log(`[WatermarkDetect] Best score: ${bestVal.toFixed(3)}`);
 
   const mask = new Uint8Array(width * height);
 
+  // Threshold 0.35 (matching main.py)
   if (bestVal > 0.35 && bestLoc !== null) {
     const starX = roiX + bestLoc.x;
     const starY = roiY + bestLoc.y;
+
+    // Padding for dilation (matching main.py: pad = max(3, int(best_size * 0.1)))
     const pad = Math.max(3, Math.round(bestSize * 0.1));
 
-    console.log(`[WatermarkRemover] DETECTED star at (${starX},${starY}) size ${bestSize}x${bestSize}`);
-
+    // Create star mask at detected size
     const starTemplate = createStarTemplate(bestSize);
 
-    for (let dy = 0; dy < bestSize; dy++) {
-      for (let dx = 0; dx < bestSize; dx++) {
-        const tIdx = (dy * bestSize + dx) * 4;
-        if (starTemplate.data[tIdx] > 127) {
-          for (let ky = -pad; ky <= pad; ky++) {
-            for (let kx = -pad; kx <= pad; kx++) {
-              if (kx * kx + ky * ky > pad * pad) continue; // circular-ish dilation
-              const mx = starX + dx + kx;
-              const my = starY + dy + ky;
-              if (mx >= 0 && mx < width && my >= 0 && my < height) {
-                mask[my * width + mx] = 255;
+    // Create dilated star mask (simulating cv2.dilate with elliptical kernel)
+    const dilatedSize = bestSize + pad * 2;
+    const dilatedMask = new Uint8Array(dilatedSize * dilatedSize);
+
+    // For each pixel in the dilated output
+    for (let dy = 0; dy < dilatedSize; dy++) {
+      for (let dx = 0; dx < dilatedSize; dx++) {
+        // Check if any star pixel within elliptical kernel distance
+        let found = false;
+        for (let ky = -pad; ky <= pad && !found; ky++) {
+          for (let kx = -pad; kx <= pad && !found; kx++) {
+            // Elliptical kernel check
+            if (kx * kx + ky * ky > pad * pad) continue;
+
+            const sy = dy - pad + ky;
+            const sx = dx - pad + kx;
+
+            if (sy >= 0 && sy < bestSize && sx >= 0 && sx < bestSize) {
+              if (starTemplate.data[(sy * bestSize + sx) * 4] > 127) {
+                found = true;
               }
             }
           }
         }
+        if (found) {
+          dilatedMask[dy * dilatedSize + dx] = 255;
+        }
       }
     }
-  } else {
-    console.log(`[WatermarkRemover] Template matching confidence too low (${bestVal.toFixed(3)}), using fallback...`);
 
+    // Place dilated mask at detected position (matching main.py's mask placement)
+    const y1 = starY - pad;
+    const x1 = starX - pad;
+
+    for (let dy = 0; dy < dilatedSize; dy++) {
+      for (let dx = 0; dx < dilatedSize; dx++) {
+        if (dilatedMask[dy * dilatedSize + dx] > 0) {
+          const mx = x1 + dx;
+          const my = y1 + dy;
+          if (mx >= 0 && mx < width && my >= 0 && my < height) {
+            mask[my * width + mx] = 255;
+          }
+        }
+      }
+    }
+
+    console.log(`[WatermarkDetect] DETECTED star at (${starX},${starY}) size ${bestSize}x${bestSize}`);
+  } else {
+    console.log(`[WatermarkDetect] Score too low (${bestVal.toFixed(3)}), using fallback`);
+
+    // Fallback (matching main.py)
     const starSize = Math.max(20, Math.min(50, Math.round(Math.min(width, height) * 0.02)));
     const centerX = width - 20 - Math.floor(starSize / 2);
     const centerY = height - 100;
@@ -401,67 +428,25 @@ function detectStarWatermark(imageData, width, height) {
     const starTemplate = createStarTemplate(starSize);
     const pad = 5;
 
-    for (let dy = 0; dy < starSize; dy++) {
-      for (let dx = 0; dx < starSize; dx++) {
-        const tIdx = (dy * starSize + dx) * 4;
-        if (starTemplate.data[tIdx] > 127) {
-          for (let ky = -pad; ky <= pad; ky++) {
-            for (let kx = -pad; kx <= pad; kx++) {
-              if (kx * kx + ky * ky > pad * pad) continue;
-              const mx = centerX - Math.floor(starSize / 2) + dx + kx;
-              const my = centerY - Math.floor(starSize / 2) + dy + ky;
-              if (mx >= 0 && mx < width && my >= 0 && my < height) {
-                mask[my * width + mx] = 255;
-              }
-            }
+    const y1 = Math.max(0, centerY - Math.floor(starSize / 2) - pad);
+    const y2 = Math.min(height, centerY + Math.floor(starSize / 2) + pad);
+    const x1 = Math.max(0, centerX - Math.floor(starSize / 2) - pad);
+    const x2 = Math.min(width, centerX + Math.floor(starSize / 2) + pad);
+
+    for (let y = y1; y < y2; y++) {
+      for (let x = x1; x < x2; x++) {
+        const sy = y - (centerY - Math.floor(starSize / 2));
+        const sx = x - (centerX - Math.floor(starSize / 2));
+        if (sy >= 0 && sy < starSize && sx >= 0 && sx < starSize) {
+          if (starTemplate.data[(sy * starSize + sx) * 4] > 127) {
+            mask[y * width + x] = 255;
           }
         }
       }
     }
-
-    console.log(`[WatermarkRemover] Using fallback position: center=(${centerX},${centerY})`);
   }
-
-  const detectedPixels = mask.reduce((sum, v) => sum + (v > 0 ? 1 : 0), 0);
-  console.log(`[WatermarkRemover] Mask covers ${detectedPixels} pixels`);
 
   return { mask, detected: bestVal > 0.35 };
-}
-
-// Separable Gaussian Blur (approximates cv2.GaussianBlur with 5x5 kernel)
-// Kernel: [1, 4, 6, 4, 1] / 16
-function blurMask(mask, width, height, radius) {
-  const blurred = new Float32Array(width * height);
-  const temp = new Float32Array(width * height);
-
-  const kernel = [0.0625, 0.25, 0.375, 0.25, 0.0625];
-  const halfK = 2; // Kernel size 5, center at 2
-
-  // Horizontal pass
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      let sum = 0;
-      for (let k = -halfK; k <= halfK; k++) {
-        const px = Math.min(Math.max(x + k, 0), width - 1);
-        sum += mask[y * width + px] * kernel[k + halfK];
-      }
-      temp[y * width + x] = sum;
-    }
-  }
-
-  // Vertical pass
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      let sum = 0;
-      for (let k = -halfK; k <= halfK; k++) {
-        const py = Math.min(Math.max(y + k, 0), height - 1);
-        sum += temp[py * width + x] * kernel[k + halfK];
-      }
-      blurred[y * width + x] = sum;
-    }
-  }
-
-  return blurred;
 }
 
 // Reflective padding helpers (mimic numpy.pad(..., mode='reflect'))
@@ -537,6 +522,29 @@ function padMaskReflect(mask, width, height, targetSize) {
 }
 
 
+
+// Blur mask for soft edge blending (box blur approximation of Gaussian)
+function blurMask(mask, width, height, radius) {
+  const output = new Uint8Array(width * height);
+  const kernelSize = radius * 2 + 1;
+  const kernelArea = kernelSize * kernelSize;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let sum = 0;
+      for (let ky = -radius; ky <= radius; ky++) {
+        for (let kx = -radius; kx <= radius; kx++) {
+          const ny = Math.max(0, Math.min(height - 1, y + ky));
+          const nx = Math.max(0, Math.min(width - 1, x + kx));
+          sum += mask[ny * width + nx];
+        }
+      }
+      output[y * width + x] = Math.round(sum / kernelArea);
+    }
+  }
+
+  return output;
+}
 
 // Run MI-GAN inpainting (ported from Python MiganInpainter)
 
@@ -1409,7 +1417,5 @@ async function processAllImages() {
 
   showNotification(`Batch complete! Processed: ${processed}, Failed: ${errors}`);
 }
-
-
 
 console.log('Gemini Watermark Remover loaded on:', window.location.href);

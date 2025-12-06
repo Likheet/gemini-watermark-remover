@@ -6,82 +6,41 @@ let isModelLoaded = false;
 let modelInputName = null;
 let modelOutputName = null;
 
-// Configure ONNX Runtime for Worker
 ort.env.wasm.numThreads = 1;
 
 self.onmessage = async (e) => {
     const { type, data, config } = e.data;
-
     try {
         switch (type) {
             case 'init':
                 await initModel(config.wasmPath);
                 postMessage({ type: 'status', status: 'ready', message: 'Ready' });
                 break;
-
             case 'process':
                 if (!isModelLoaded) throw new Error('Model not loaded');
-
-                // Theatrical Status Sequence
-                postMessage({ type: 'status', status: 'processing', message: 'Analyzing image structure...' });
-                postMessage({ type: 'progress', percent: 10 });
-                await new Promise(r => setTimeout(r, 600));
-
-                postMessage({ type: 'status', status: 'processing', message: 'Identifying watermark patterns...' });
-                postMessage({ type: 'progress', percent: 30 });
-                await new Promise(r => setTimeout(r, 800));
-
-                postMessage({ type: 'status', status: 'processing', message: 'Generating inpaint mask...' });
-                postMessage({ type: 'progress', percent: 50 });
-                await new Promise(r => setTimeout(r, 600));
-
-                postMessage({ type: 'status', status: 'processing', message: 'Synthesizing clean texture...' });
-                postMessage({ type: 'progress', percent: 75 });
-                await new Promise(r => setTimeout(r, 500));
-
-                // Process with optional userMask
-                const resultImageBitmap = await processImage(data.imageData, data.width, data.height, data.userMask);
-
+                postMessage({ type: 'status', status: 'processing', message: 'Processing image...' });
+                postMessage({ type: 'progress', percent: 20 });
+                const result = await processImage(data.imageData, data.width, data.height, data.userMask);
                 postMessage({ type: 'status', status: 'processing', message: 'Finalizing...' });
                 postMessage({ type: 'progress', percent: 90 });
-
-                postMessage({
-                    type: 'result',
-                    result: resultImageBitmap,
-                    status: 'ready',
-                    message: 'Processing complete'
-                }, [resultImageBitmap]);
+                postMessage({ type: 'result', result: result, status: 'ready', message: 'Processing complete' }, [result]);
                 break;
         }
     } catch (error) {
         console.error('Worker Error:', error);
-        postMessage({
-            type: 'error',
-            message: error.message
-        });
+        postMessage({ type: 'error', message: error.message });
     }
 };
 
 async function initModel(wasmPath) {
     if (isModelLoaded) return;
-
-    if (wasmPath) {
-        ort.env.wasm.wasmPaths = wasmPath;
-    }
-
+    if (wasmPath) ort.env.wasm.wasmPaths = wasmPath;
     const modelUrl = 'https://huggingface.co/lxfater/inpaint-web/resolve/main/migan.onnx';
-
-    modelSession = await ort.InferenceSession.create(modelUrl, {
-        executionProviders: ['wasm'],
-        graphOptimizationLevel: 'all'
-    });
-
+    modelSession = await ort.InferenceSession.create(modelUrl, { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
     modelInputName = modelSession.inputNames[0];
     modelOutputName = modelSession.outputNames[0];
     isModelLoaded = true;
 }
-
-// --- Image Processing Logic ---
 
 function createStarTemplate(size = 48) {
     const canvas = new OffscreenCanvas(size, size);
@@ -89,7 +48,6 @@ function createStarTemplate(size = 48) {
     const center = size / 2;
     const outerRadius = size / 2 - 2;
     const innerRadius = size / 6;
-
     ctx.fillStyle = 'white';
     ctx.beginPath();
     for (let i = 0; i < 8; i++) {
@@ -142,6 +100,8 @@ function templateMatchNCC(roiGray, roiW, roiH, template, templateSize) {
         for (let x = 0; x <= roiW - templateSize; x++) {
             let sum = 0;
             let sumSq = 0;
+            // Optimizable: loop unrolling or specialized logic?
+            // For now, straightforward usage.
             for (let ty = 0; ty < templateSize; ty++) {
                 for (let tx = 0; tx < templateSize; tx++) {
                     const idx = (y + ty) * roiW + (x + tx);
@@ -173,27 +133,43 @@ function templateMatchNCC(roiGray, roiW, roiH, template, templateSize) {
     return { maxVal, maxLoc };
 }
 
+// Detect star watermark - Exact port of main.py's detect_star_watermark
 function detectStarWatermark(imageDataArr, width, height) {
+    // Convert to grayscale (matching cv2.cvtColor)
     const gray = new Uint8Array(width * height);
     for (let i = 0; i < width * height; i++) {
-        gray[i] = Math.round(0.299 * imageDataArr[i * 4] + 0.587 * imageDataArr[i * 4 + 1] + 0.114 * imageDataArr[i * 4 + 2]);
+        const r = imageDataArr[i * 4];
+        const g = imageDataArr[i * 4 + 1];
+        const b = imageDataArr[i * 4 + 2];
+        gray[i] = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
     }
+
+    // ROI: Bottom-right 300x300 (matching main.py)
     const searchH = Math.min(300, Math.floor(height / 2));
     const searchW = Math.min(300, Math.floor(width / 2));
     const roiY = height - searchH;
     const roiX = width - searchW;
+
+    // Extract ROI grayscale
     const roiGray = new Uint8Array(searchW * searchH);
     for (let y = 0; y < searchH; y++) {
         for (let x = 0; x < searchW; x++) {
             roiGray[y * searchW + x] = gray[(roiY + y) * width + (roiX + x)];
         }
     }
+
     const baseTemplate = createStarTemplate(48);
+
+    // Scales: 10 values from 0.3 to 2.0 (matching np.linspace(0.3, 2.0, 10))
     const scales = [];
-    for (let i = 0; i < 20; i++) scales.push(0.3 + i * ((2.0 - 0.3) / 19));
-    let bestVal = -1;
+    for (let i = 0; i < 10; i++) {
+        scales.push(0.3 + i * ((2.0 - 0.3) / 9));
+    }
+
+    let bestVal = 0;
     let bestLoc = null;
     let bestSize = null;
+
     for (const scale of scales) {
         const newSize = Math.round(48 * scale);
         if (newSize < 10 || newSize > Math.min(searchH, searchW)) continue;
@@ -205,47 +181,98 @@ function detectStarWatermark(imageDataArr, width, height) {
             bestSize = newSize;
         }
     }
+
+    console.log(`[WatermarkDetect] Best score: ${bestVal.toFixed(3)}`);
+
     const mask = new Uint8Array(width * height);
+
+    // Threshold 0.35 (matching main.py)
     if (bestVal > 0.35 && bestLoc !== null) {
         const starX = roiX + bestLoc.x;
         const starY = roiY + bestLoc.y;
+
+        // Padding for dilation (matching main.py: pad = max(3, int(best_size * 0.1)))
         const pad = Math.max(3, Math.round(bestSize * 0.1));
+
+        // Create star mask at detected size
         const starTemplate = createStarTemplate(bestSize);
-        for (let dy = 0; dy < bestSize; dy++) {
-            for (let dx = 0; dx < bestSize; dx++) {
-                if (starTemplate.data[(dy * bestSize + dx) * 4] > 127) {
-                    for (let ky = -pad; ky <= pad; ky++) {
-                        for (let kx = -pad; kx <= pad; kx++) {
-                            if (kx * kx + ky * ky > pad * pad) continue;
-                            const mx = starX + dx + kx;
-                            const my = starY + dy + ky;
-                            if (mx >= 0 && mx < width && my >= 0 && my < height) mask[my * width + mx] = 255;
+
+        // Create dilated star mask (simulating cv2.dilate with elliptical kernel)
+        const dilatedSize = bestSize + pad * 2;
+        const dilatedMask = new Uint8Array(dilatedSize * dilatedSize);
+
+        // For each pixel in the dilated output
+        for (let dy = 0; dy < dilatedSize; dy++) {
+            for (let dx = 0; dx < dilatedSize; dx++) {
+                // Check if any star pixel within elliptical kernel distance
+                let found = false;
+                for (let ky = -pad; ky <= pad && !found; ky++) {
+                    for (let kx = -pad; kx <= pad && !found; kx++) {
+                        // Elliptical kernel check
+                        if (kx * kx + ky * ky > pad * pad) continue;
+
+                        const sy = dy - pad + ky;
+                        const sx = dx - pad + kx;
+
+                        if (sy >= 0 && sy < bestSize && sx >= 0 && sx < bestSize) {
+                            if (starTemplate.data[(sy * bestSize + sx) * 4] > 127) {
+                                found = true;
+                            }
                         }
+                    }
+                }
+                if (found) {
+                    dilatedMask[dy * dilatedSize + dx] = 255;
+                }
+            }
+        }
+
+        // Place dilated mask at detected position (matching main.py's mask placement)
+        const y1 = starY - pad;
+        const x1 = starX - pad;
+
+        for (let dy = 0; dy < dilatedSize; dy++) {
+            for (let dx = 0; dx < dilatedSize; dx++) {
+                if (dilatedMask[dy * dilatedSize + dx] > 0) {
+                    const mx = x1 + dx;
+                    const my = y1 + dy;
+                    if (mx >= 0 && mx < width && my >= 0 && my < height) {
+                        mask[my * width + mx] = 255;
                     }
                 }
             }
         }
+
+        console.log(`[WatermarkDetect] DETECTED star at (${starX},${starY}) size ${bestSize}x${bestSize}`);
     } else {
+        console.log(`[WatermarkDetect] Score too low (${bestVal.toFixed(3)}), using fallback`);
+
+        // Fallback (matching main.py)
         const starSize = Math.max(20, Math.min(50, Math.round(Math.min(width, height) * 0.02)));
         const centerX = width - 20 - Math.floor(starSize / 2);
         const centerY = height - 100;
+
         const starTemplate = createStarTemplate(starSize);
         const pad = 5;
-        for (let dy = 0; dy < starSize; dy++) {
-            for (let dx = 0; dx < starSize; dx++) {
-                if (starTemplate.data[(dy * starSize + dx) * 4] > 127) {
-                    for (let ky = -pad; ky <= pad; ky++) {
-                        for (let kx = -pad; kx <= pad; kx++) {
-                            if (kx * kx + ky * ky > pad * pad) continue;
-                            const mx = centerX - Math.floor(starSize / 2) + dx + kx;
-                            const my = centerY - Math.floor(starSize / 2) + dy + ky;
-                            if (mx >= 0 && mx < width && my >= 0 && my < height) mask[my * width + mx] = 255;
-                        }
+
+        const y1 = Math.max(0, centerY - Math.floor(starSize / 2) - pad);
+        const y2 = Math.min(height, centerY + Math.floor(starSize / 2) + pad);
+        const x1 = Math.max(0, centerX - Math.floor(starSize / 2) - pad);
+        const x2 = Math.min(width, centerX + Math.floor(starSize / 2) + pad);
+
+        for (let y = y1; y < y2; y++) {
+            for (let x = x1; x < x2; x++) {
+                const sy = y - (centerY - Math.floor(starSize / 2));
+                const sx = x - (centerX - Math.floor(starSize / 2));
+                if (sy >= 0 && sy < starSize && sx >= 0 && sx < starSize) {
+                    if (starTemplate.data[(sy * starSize + sx) * 4] > 127) {
+                        mask[y * width + x] = 255;
                     }
                 }
             }
         }
     }
+
     return { mask, detected: bestVal > 0.35 };
 }
 
@@ -285,28 +312,21 @@ function padMaskReflect(mask, width, height, targetSize) {
     return padded;
 }
 
-// Inpaint function adapted for non-DOM use (except OffscreenCanvas)
 async function processImage(inputImageData, width, height, userMask = null) {
-    const imageData = inputImageData; // Uint8ClampedArray
-
+    const imageData = inputImageData;
     let mask;
     if (userMask) {
-        // User provided manual mask (RGBA)
-        // Convert to single channel Uint8Array (0 or 255)
         postMessage({ type: 'status', message: 'Processing Custom Mask...' });
         mask = new Uint8Array(width * height);
         for (let i = 0; i < width * height; i++) {
-            // Logic: If Red > 0 (or Alpha > 0), set to 255
             mask[i] = (userMask[i * 4 + 3] > 0) ? 255 : 0;
         }
     } else {
-        // 1. Detect Watermark
         postMessage({ type: 'status', message: 'Scanning for watermark...' });
         const detection = detectStarWatermark(imageData, width, height);
         mask = detection.mask;
     }
 
-    // 2. Crop logic
     let minX = width, minY = height, maxX = 0, maxY = 0;
     for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
@@ -318,12 +338,7 @@ async function processImage(inputImageData, width, height, userMask = null) {
             }
         }
     }
-    // Handle empty mask case
     if (maxX === 0) {
-        // Return original if nothing detected/masked
-        return new OffscreenCanvas(width, height).transferToImageBitmap();
-        // Wait, OffscreenCanvas returns blank? No, let's fix empty mask fallback
-        // Just return original image converted to bitmap
         const c = new OffscreenCanvas(width, height);
         c.getContext('2d').putImageData(new ImageData(imageData, width, height), 0, 0);
         return c.transferToImageBitmap();
@@ -337,7 +352,6 @@ async function processImage(inputImageData, width, height, userMask = null) {
     const cropW = maxX - minX;
     const cropH = maxY - minY;
 
-    // Crop Mask
     const cropMask = new Uint8Array(cropW * cropH);
     for (let y = 0; y < cropH; y++) {
         for (let x = 0; x < cropW; x++) {
@@ -345,7 +359,6 @@ async function processImage(inputImageData, width, height, userMask = null) {
         }
     }
 
-    // Resize Logic
     const maxDim = Math.max(cropW, cropH);
     let processW = cropW;
     let processH = cropH;
@@ -355,13 +368,11 @@ async function processImage(inputImageData, width, height, userMask = null) {
         processH = Math.round(cropH * scale);
     }
 
-    // Resize Crop Image using OffscreenCanvas
     const processCanvas = new OffscreenCanvas(processW, processH);
     const processCtx = processCanvas.getContext('2d', { willReadFrequently: true });
     const cropCanvas = new OffscreenCanvas(cropW, cropH);
     const cropCtx = cropCanvas.getContext('2d', { willReadFrequently: true });
 
-    // Extract crop data from original array
     const cropData = new Uint8ClampedArray(cropW * cropH * 4);
     for (let y = 0; y < cropH; y++) {
         const rowSrc = (minY + y) * width * 4;
@@ -371,11 +382,9 @@ async function processImage(inputImageData, width, height, userMask = null) {
         cropData.set(imageData.subarray(start, end), rowDst);
     }
     cropCtx.putImageData(new ImageData(cropData, cropW, cropH), 0, 0);
-
     processCtx.drawImage(cropCanvas, 0, 0, cropW, cropH, 0, 0, processW, processH);
     const processData = processCtx.getImageData(0, 0, processW, processH).data;
 
-    // Resize Mask
     const resizedMask = new Uint8Array(processW * processH);
     for (let y = 0; y < processH; y++) {
         for (let x = 0; x < processW; x++) {
@@ -389,7 +398,6 @@ async function processImage(inputImageData, width, height, userMask = null) {
     const paddedImage = padImageReflect(processData, processW, processH, targetSize);
     const paddedMask = padMaskReflect(resizedMask, processW, processH, targetSize);
 
-    // Inference Input
     const inputData = new Float32Array(4 * targetSize * targetSize);
     const area = targetSize * targetSize;
     for (let i = 0; i < area; i++) {
@@ -398,7 +406,6 @@ async function processImage(inputImageData, width, height, userMask = null) {
         const r = (paddedImage[dataIdx] / 255.0) * 2 - 1;
         const g = (paddedImage[dataIdx + 1] / 255.0) * 2 - 1;
         const b = (paddedImage[dataIdx + 2] / 255.0) * 2 - 1;
-
         inputData[i] = 0.5 - m;
         inputData[area + i] = r * (1 - m);
         inputData[2 * area + i] = g * (1 - m);
@@ -423,7 +430,6 @@ async function processImage(inputImageData, width, height, userMask = null) {
             const pixelIdx = y * targetSize + x;
             const dataIdx = pixelIdx * 4;
             let rOut, gOut, bOut;
-
             if (isNCHW) {
                 rOut = output[0 * area + pixelIdx];
                 gOut = output[1 * area + pixelIdx];
@@ -443,19 +449,13 @@ async function processImage(inputImageData, width, height, userMask = null) {
         }
     }
 
-    const widthInt = Math.floor(width);
-    const heightInt = Math.floor(height);
-    if (widthInt === 0 || heightInt === 0) throw new Error("Invalid image dimensions");
-
     const tempResultCanvas = new OffscreenCanvas(targetSize, targetSize);
     const tempResultCtx = tempResultCanvas.getContext('2d');
     tempResultCtx.putImageData(outputImageData, 0, 0);
 
-    const finalCanvas = new OffscreenCanvas(widthInt, heightInt);
+    const finalCanvas = new OffscreenCanvas(Math.floor(width), Math.floor(height));
     const finalCtx = finalCanvas.getContext('2d');
-    if (!finalCtx) throw new Error("Failed to get 2d context for finalCanvas");
-
-    finalCtx.putImageData(new ImageData(imageData, widthInt, heightInt), 0, 0);
+    finalCtx.putImageData(new ImageData(imageData, Math.floor(width), Math.floor(height)), 0, 0);
 
     const validResultCanvas = new OffscreenCanvas(processW, processH);
     const validCtx = validResultCanvas.getContext('2d');
@@ -479,7 +479,7 @@ async function processImage(inputImageData, width, height, userMask = null) {
 
     const blurredMask = new Float32Array(cropW * cropH);
     const tempBlur = new Float32Array(cropW * cropH);
-    const kernel = [0.0625, 0.25, 0.375, 0.25, 0.0625];
+    const kSmooth = [0.0625, 0.25, 0.375, 0.25, 0.0625];
 
     for (let y = 0; y < cropH; y++) {
         for (let x = 0; x < cropW; x++) {
@@ -488,7 +488,7 @@ async function processImage(inputImageData, width, height, userMask = null) {
             for (let k = -2; k <= 2; k++) {
                 const px = Math.min(Math.max(x + k, 0), cropW - 1);
                 const val = (cropMask[rowOffset + px] > 127) ? 1.0 : 0.0;
-                sum += val * kernel[k + 2];
+                sum += val * kSmooth[k + 2];
             }
             tempBlur[rowOffset + x] = sum;
         }
@@ -498,7 +498,7 @@ async function processImage(inputImageData, width, height, userMask = null) {
             let sum = 0;
             for (let k = -2; k <= 2; k++) {
                 const py = Math.min(Math.max(y + k, 0), cropH - 1);
-                sum += tempBlur[py * cropW + x] * kernel[k + 2];
+                sum += tempBlur[py * cropW + x] * kSmooth[k + 2];
             }
             blurredMask[y * cropW + x] = sum;
         }
