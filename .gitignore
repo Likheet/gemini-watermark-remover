@@ -1,0 +1,5 @@
+/.gradio
+/.venv
+/lama.py
+/lama_inpaint.py
+/__pycache__

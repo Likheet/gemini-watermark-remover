@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Watermark Remover</title>
+  <style>
+    :root {
+      --bg: #121212;
+      --surface: #1e1e1e;
+      --border: #333;
+      --text: #e0e0e0;
+      --text-muted: #888;
+      --primary: #ffffff;
+      --primary-fg: #000000;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 250px;
+      padding: 16px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, system-ui, sans-serif;
+    }
+
+    .menu {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    button {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: background 0.2s;
+      width: 100%;
+      text-align: left;
+    }
+
+    button:hover {
+      background: #2a2a2a;
+    }
+
+    .icon {
+      font-size: 16px;
+      opacity: 0.7;
+    }
+
+    header {
+      margin-bottom: 16px;
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Toggle Styles */
+    .toggle-row {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 12px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+    }
+
+    .toggle-label {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 36px;
+      height: 20px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #333;
+      transition: .4s;
+      border-radius: 20px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 2px;
+      bottom: 2px;
+      background-color: white;
+      transition: .4s;
+      border-radius: 50%;
+    }
+
+    input:checked+.slider {
+      background-color: var(--primary);
+    }
+
+    input:checked+.slider:before {
+      background-color: black;
+    }
+
+    input:checked+.slider:before {
+      transform: translateX(16px);
+    }
+
+    /* Quality Slider */
+    .quality-row {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-top: none;
+      /* Connect visually to toggle above? Or separate? */
+      /* Let's keep it separate but indented or connected */
+      margin-top: -6px;
+      padding: 12px;
+      padding-top: 18px;
+      /* Extra padding to offset overlap if we want */
+      border-bottom-left-radius: 6px;
+      border-bottom-right-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* Adjust toggle row to look connected when quality is open */
+    .toggle-row.expanded {
+      border-bottom-left-radius: 0;
+      border-bottom-right-radius: 0;
+      border-bottom: none;
+    }
+
+    .quality-header {
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .slider-input {
+      width: 100%;
+      accent-color: var(--primary);
+    }
+  </style>
+</head>
+
+<body>
+  <header>Watermark Remover</header>
+
+  <div class="menu">
+    <button id="dashboardBtn">
+      <span class="icon">📊</span>
+      Dashboard
+    </button>
+    <div class="toggle-row">
+      <div class="toggle-label">
+        <span class="icon">💾</span>
+        <span>Compress Image?</span>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="compressToggle">
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="quality-row" id="qualityRow" style="display: none;">
+      <div class="quality-header">
+        <span>Quality: <span id="qualityValue">80</span>%</span>
+      </div>
+      <input type="range" id="qualitySlider" min="10" max="100" value="80" class="slider-input">
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+
+</html>
