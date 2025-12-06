@@ -36,7 +36,7 @@ async function initModel(wasmPath) {
     if (isModelLoaded) return;
     if (wasmPath) ort.env.wasm.wasmPaths = wasmPath;
     const modelUrl = 'https://huggingface.co/lxfater/inpaint-web/resolve/main/migan.onnx';
-    modelSession = await ort.InferenceSession.create(modelUrl, { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
+    modelSession = await ort.InferenceSession.create(modelUrl, { executionProviders: ['webgpu', 'wasm'], graphOptimizationLevel: 'all' });
     modelInputName = modelSession.inputNames[0];
     modelOutputName = modelSession.outputNames[0];
     isModelLoaded = true;
@@ -74,6 +74,30 @@ function resizeTemplate(template, newSize) {
     return ctx.getImageData(0, 0, newSize, newSize);
 }
 
+// Build integral image (summed-area table) for O(1) rectangular sum queries
+function buildIntegralImage(data, w, h) {
+    const integral = new Float64Array((w + 1) * (h + 1));
+    const integralSq = new Float64Array((w + 1) * (h + 1));
+    const stride = w + 1;
+
+    for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+            const v = data[y * w + x] / 255.0;
+            const idx = (y + 1) * stride + (x + 1);
+            integral[idx] = v + integral[idx - 1] + integral[idx - stride] - integral[idx - stride - 1];
+            integralSq[idx] = v * v + integralSq[idx - 1] + integralSq[idx - stride] - integralSq[idx - stride - 1];
+        }
+    }
+    return { integral, integralSq, stride };
+}
+
+function rectSum(integral, stride, x1, y1, x2, y2) {
+    return integral[(y2 + 1) * stride + (x2 + 1)]
+        - integral[(y1) * stride + (x2 + 1)]
+        - integral[(y2 + 1) * stride + (x1)]
+        + integral[(y1) * stride + (x1)];
+}
+
 function templateMatchNCC(roiGray, roiW, roiH, template, templateSize) {
     const n = templateSize * templateSize;
     const sqrtN = Math.sqrt(n);
@@ -93,23 +117,18 @@ function templateMatchNCC(roiGray, roiW, roiH, template, templateSize) {
     const tNorm = Math.sqrt(tVar);
     if (tNorm < 1e-6) return { maxVal: 0, maxLoc: null };
 
+    // Build integral images for O(1) sum queries
+    const { integral, integralSq, stride } = buildIntegralImage(roiGray, roiW, roiH);
+
     let maxVal = -1;
     let maxLoc = null;
 
     for (let y = 0; y <= roiH - templateSize; y++) {
         for (let x = 0; x <= roiW - templateSize; x++) {
-            let sum = 0;
-            let sumSq = 0;
-            // Optimizable: loop unrolling or specialized logic?
-            // For now, straightforward usage.
-            for (let ty = 0; ty < templateSize; ty++) {
-                for (let tx = 0; tx < templateSize; tx++) {
-                    const idx = (y + ty) * roiW + (x + tx);
-                    const v = roiGray[idx] / 255.0;
-                    sum += v;
-                    sumSq += v * v;
-                }
-            }
+            // O(1) sum and sumSq using integral images
+            const sum = rectSum(integral, stride, x, y, x + templateSize - 1, y + templateSize - 1);
+            const sumSq = rectSum(integralSq, stride, x, y, x + templateSize - 1, y + templateSize - 1);
+
             const mean = sum / n;
             const variance = Math.max(0, sumSq / n - mean * mean);
             const std = Math.sqrt(variance);
@@ -160,11 +179,8 @@ function detectStarWatermark(imageDataArr, width, height) {
 
     const baseTemplate = createStarTemplate(48);
 
-    // Scales: 10 values from 0.3 to 2.0 (matching np.linspace(0.3, 2.0, 10))
-    const scales = [];
-    for (let i = 0; i < 10; i++) {
-        scales.push(0.3 + i * ((2.0 - 0.3) / 9));
-    }
+    // Scales: 8 values optimized for common watermark sizes (faster than 10)
+    const scales = [0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.7, 2.0];
 
     let bestVal = 0;
     let bestLoc = null;
@@ -180,6 +196,8 @@ function detectStarWatermark(imageDataArr, width, height) {
             bestLoc = result.maxLoc;
             bestSize = newSize;
         }
+        // Early termination: if we find a very good match, stop searching
+        if (bestVal > 0.7) break;
     }
 
     console.log(`[WatermarkDetect] Best score: ${bestVal.toFixed(3)}`);
