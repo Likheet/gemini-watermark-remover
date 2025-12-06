@@ -165,7 +165,7 @@ function showProgress(show, percent = 0) {
 }
 
 function initWorker() {
-    updateStatus('loading', 'Initializing AI Model...');
+    updateStatus('loading', 'Initializing Masking Model...');
     worker = new Worker('processor.worker.js');
     worker.onmessage = handleWorkerMessage;
     worker.onerror = (err) => {
@@ -271,7 +271,8 @@ function handleSingleFile(file) {
 // --- Batch Page Logic ---
 
 function setupBatchPage() {
-    setupDragDrop(dropZoneBatch, fileInputBatch, (file) => handleBatchFiles([file]));
+    fileInputBatch.multiple = true; // Ensure multiple selection is enabled
+    setupDragDrop(dropZoneBatch, fileInputBatch, handleBatchFiles, true);  // true = batch mode
     dropZoneBatch.addEventListener('drop', (e) => {
         e.preventDefault();
         dropZoneBatch.classList.remove('drag-over');
@@ -292,18 +293,32 @@ function setupBatchPage() {
 }
 
 function handleBatchFiles(fileList) {
-    for (const file of fileList) {
-        if (!file.type.startsWith('image/')) continue;
-        const id = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+    console.log('[BatchDebug] Received files:', fileList.length, fileList);
+    const files = Array.from(fileList);
+
+    let addedCount = 0;
+    files.forEach((file, index) => { // Use index for unique ID
+        if (!file.type.startsWith('image/')) return;
+
+        // Ensure strictly unique ID by combining time + random + index
+        const id = Date.now() + '-' + index + '-' + Math.random().toString(36).substr(2, 9);
         const item = { id, file, name: file.name, status: 'pending', resultDataUrl: null, thumbUrl: null };
         queue.push(item);
+        addedCount++;
 
         const reader = new FileReader();
-        reader.onload = (e) => { item.thumbUrl = e.target.result; renderQueue(); };
+        reader.onload = (e) => {
+            item.thumbUrl = e.target.result;
+            renderQueue();
+        };
         reader.readAsDataURL(file);
-    }
+    });
+
+    console.log(`[BatchDebug] Added ${addedCount} files. Queue size: ${queue.length}`);
     renderQueue();
     updateBatchUI();
+
+    if (fileInputBatch) fileInputBatch.value = '';
 }
 
 function renderQueue() {
@@ -412,6 +427,20 @@ function downloadBatchZip() {
 
 function setupManualPage() {
     setupDragDrop(dropZoneManual, fileInputManual, handleManualFile);
+
+    // Manual Warning Banner Logic
+    const manualWarningBanner = document.getElementById('manualWarningBanner');
+    const closeManualWarning = document.getElementById('closeManualWarning');
+
+    // Check if previously dismissed (using localStorage for UI state)
+    if (!localStorage.getItem('manualWarningDismissed')) {
+        manualWarningBanner.classList.remove('hidden');
+    }
+
+    closeManualWarning.addEventListener('click', () => {
+        manualWarningBanner.classList.add('hidden');
+        localStorage.setItem('manualWarningDismissed', 'true');
+    });
 
     manualCtx = manualCanvas.getContext('2d', { willReadFrequently: true });
 
@@ -735,13 +764,22 @@ function handleResult(bitmap) {
 
 // --- Helpers ---
 
-function setupDragDrop(zone, input, handler) {
+function setupDragDrop(zone, input, handler, isBatch = false) {
+    // Auto-detect batch mode if input has multiple attribute
+    const isMulti = isBatch || input.multiple;
+
     zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('drag-over'); });
     zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
     zone.addEventListener('drop', (e) => {
         e.preventDefault();
         zone.classList.remove('drag-over');
-        if (e.dataTransfer.files.length) handler(e.dataTransfer.files[0]);
+        if (e.dataTransfer.files.length) {
+            if (isMulti) {
+                handler(e.dataTransfer.files);  // Pass all files for batch
+            } else {
+                handler(e.dataTransfer.files[0]);  // Single file for other modes
+            }
+        }
     });
     zone.addEventListener('click', (e) => {
         // Allow click if it's within the upload-card OR the batch-drop-banner
@@ -753,7 +791,13 @@ function setupDragDrop(zone, input, handler) {
         }
     });
     input.addEventListener('change', (e) => {
-        if (e.target.files.length) handler(e.target.files[0]);
+        if (e.target.files.length) {
+            if (isMulti) {
+                handler(e.target.files);  // Pass all files for batch
+            } else {
+                handler(e.target.files[0]);  // Single file for other modes
+            }
+        }
     });
 }
 

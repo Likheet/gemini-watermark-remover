@@ -655,6 +655,42 @@
         #manualCanvasWrapper:hover .brush-cursor {
             display: block;
         }
+
+        /* Persistent Warning Banner */
+        .manual-warning-banner {
+            background: rgba(234, 179, 8, 0.15);
+            border: 1px solid rgba(234, 179, 8, 0.3);
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            font-size: 13px;
+            line-height: 1.5;
+            color: #fef08a;
+            position: relative;
+        }
+
+        .manual-warning-banner p {
+            margin: 0;
+            flex: 1;
+        }
+
+        .manual-warning-close {
+            background: transparent;
+            border: none;
+            color: rgba(254, 240, 138, 0.6);
+            cursor: pointer;
+            padding: 4px;
+            font-size: 16px;
+            line-height: 1;
+        }
+
+        .manual-warning-close:hover {
+            color: #fef08a;
+            background: rgba(255, 255, 255, 0.1);
+        }
     </style>
 </head>
 
@@ -766,7 +802,13 @@
         </div>
 
         <!-- PAGE 3: Manual Mode -->
-        <div id="pageManual" class="page-container">
+        <div id="pageManual" class="page-container" style="flex-direction:column; gap:20px;">
+            <div id="manualWarningBanner" class="manual-warning-banner hidden">
+                <span style="font-size:18px;">⚠️</span>
+                <p><strong>Note:</strong> Manual Mode is designed for removing small watermarks and simple text.<br>It is NOT intended for removing large objects or complex backgrounds.</p>
+                <button id="closeManualWarning" class="manual-warning-close" title="Dismiss forever">✕</button>
+            </div>
+
             <div class="split-view">
                 <!-- Input/Draw Pane -->
                 <div class="pane">

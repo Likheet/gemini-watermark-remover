@@ -53,15 +53,27 @@ async function loadModel() {
 
   try {
 
-    showNotification('Loading AI model... (~30MB)');
+    showNotification('Loading Masking Model...');
 
 
 
     if (!checkONNXRuntime()) {
-
       throw new Error('ONNX Runtime not available');
-
     }
+
+    // Suppress annoying "Unknown CPU vendor" warning from ONNX Runtime (harmless in browser)
+    const originalLog = console.log;
+    const originalWarn = console.warn;
+    const filterFn = (args) => {
+      const msg = args[0];
+      return typeof msg === 'string' && (msg.includes('Unknown CPU vendor') || msg.includes('cpuinfo_vendor value'));
+    };
+
+    console.warn = function (...args) { if (!filterFn(args)) originalWarn.apply(console, args); };
+    console.log = function (...args) { if (!filterFn(args)) originalLog.apply(console, args); };
+
+    // Configure ONNX Runtime
+    ort.env.logLevel = 'error';
 
 
 
@@ -1234,14 +1246,26 @@ async function processImage(imageUrl, options = { silent: false }) {
       downloadImage(maskDataUrl, 'watermark-mask-debug.png');
     }
 
-    const dataUrl = result.toDataURL('image/png');
 
-    // Always download the processed image
+    // Use user preferences for compression
+    const storage = await chrome.storage.local.get(['compressImage', 'compressionQuality']);
+    const useJpeg = storage.compressImage === true;
+    const quality = (storage.compressionQuality || 80) / 100;
+
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const filename = `watermark-removed-${timestamp}.png`;
+    let dataUrl, filename;
+
+    if (useJpeg) {
+      dataUrl = result.toDataURL('image/jpeg', quality);
+      filename = `watermark-removed-${timestamp}.jpg`;
+    } else {
+      dataUrl = result.toDataURL('image/png');
+      filename = `watermark-removed-${timestamp}.png`;
+    }
+
     downloadImage(dataUrl, filename);
 
-    if (!options.silent) showNotification('✓ Image downloaded!');
+    if (!options.silent) showNotification('Image downloaded successfully');
 
 
 
@@ -1292,53 +1316,61 @@ function downloadImage(dataUrl, filename) {
 // Show notification toast
 
 function showNotification(message) {
-
   const existing = document.getElementById('watermark-remover-notification');
-
   if (existing) existing.remove();
 
-
+  // Determine if success message for green tick
+  const isSuccess = message.toLowerCase().includes('successfully') || message.toLowerCase().includes('done') || message.toLowerCase().includes('complete');
 
   const notification = document.createElement('div');
-
   notification.id = 'watermark-remover-notification';
 
-  notification.textContent = message;
+  // SVG Checkmark
+  const iconHtml = isSuccess ?
+    `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-right: 12px; flex-shrink: 0;">
+        <path d="M12 22C17.5 22 22 17.5 22 12C22 6.5 17.5 2 12 2C6.5 2 2 6.5 2 12C2 17.5 6.5 22 12 22Z" fill="#22c55e" fill-opacity="0.2"/>
+        <path d="M7.75 11.9999L10.58 14.8299L16.25 9.16992" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+     </svg>` : '';
 
+  notification.innerHTML = `<div style="display:flex; align-items:center;">${iconHtml}<span>${message}</span></div>`;
+
+  // Modern, Minimalist "Vercel-like" Design
   notification.style.cssText = `
-
     position: fixed;
-
-    bottom: 20px;
-
-    right: 20px;
-
-    padding: 12px 24px;
-
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-
-    color: white;
-
+    bottom: 24px;
+    right: 24px;
+    padding: 12px 16px;
+    background: #171717; /* Solid dark grey/black */
+    color: #ededed;
+    border: 1px solid #333333;
     border-radius: 8px;
-
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-
-    font-size: 14px;
-
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 13px;
+    letter-spacing: -0.01em;
     font-weight: 500;
-
-    z-index: 999999;
-
-    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-
+    z-index: 2147483647; /* Max Z-index */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    display: flex;
+    align-items: center;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   `;
-
-
 
   document.body.appendChild(notification);
 
-  setTimeout(() => notification.remove(), 4000);
+  // Animate in
+  requestAnimationFrame(() => {
+    notification.style.opacity = '1';
+    notification.style.transform = 'translateY(0)';
+  });
 
+  // Animate out
+  setTimeout(() => {
+    notification.style.opacity = '0';
+    notification.style.transform = 'translateY(4px)';
+    setTimeout(() => notification.remove(), 200);
+  }, 4000);
 }
 
 

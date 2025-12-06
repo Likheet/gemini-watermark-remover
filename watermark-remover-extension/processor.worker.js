@@ -6,6 +6,17 @@ let isModelLoaded = false;
 let modelInputName = null;
 let modelOutputName = null;
 
+// Suppress "Unknown CPU vendor" logs
+const originalWarn = console.warn;
+const originalLog = console.log;
+const filterFn = (args) => {
+    const msg = args[0];
+    return typeof msg === 'string' && (msg.includes('Unknown CPU vendor') || msg.includes('cpuinfo_vendor value'));
+};
+console.warn = function (...args) { if (!filterFn(args)) originalWarn.apply(console, args); };
+console.log = function (...args) { if (!filterFn(args)) originalLog.apply(console, args); };
+
+ort.env.logLevel = 'error';
 ort.env.wasm.numThreads = 1;
 
 self.onmessage = async (e) => {
