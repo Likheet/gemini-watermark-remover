@@ -34,6 +34,8 @@ const manualCanvasWrapper = document.getElementById('manualCanvasWrapper');
 const manualPlaceholder = document.getElementById('manualPlaceholder');
 const brushSizeInput = document.getElementById('brushSize');
 const clearMaskBtn = document.getElementById('clearMaskBtn');
+const undoMaskBtn = document.getElementById('undoMaskBtn');
+const fullscreenBtn = document.getElementById('fullscreenBtn');
 const processBtnManual = document.getElementById('processBtnManual');
 const resetManualBtn = document.getElementById('resetManualBtn');
 const manualResultImg = document.getElementById('manualResultImg');
@@ -68,6 +70,8 @@ let lastY = 0;
 let manualCtx = null;
 let manualMaskCtx = null;
 let maskCanvas = null;
+let strokeHistory = [];      // Stores canvas states for undo
+let maskStrokeHistory = [];  // Stores mask states for undo
 
 // --- Initialization ---
 
@@ -117,11 +121,21 @@ function showProgress(show, percent = 0) {
         progressContainer.classList.add('active');
 
         // Single Page Placeholder Progress
-        const orb = document.getElementById('singleProcessingOrb');
-        const text = document.querySelector('#singleResultPlaceholder .placeholder-text');
+        if (currentPage === 'single') {
+            const orb = document.getElementById('singleProcessingOrb');
+            const text = document.querySelector('#singleResultPlaceholder .placeholder-text');
+            if (orb) orb.parentElement.classList.add('loading');
+            if (text) {
+                text.textContent = "Generating";
+                text.classList.add('breathing-text');
+            }
+        }
 
-        if (currentPage === 'single' && orb) {
-            orb.parentElement.classList.add('loading');
+        // Manual Page Placeholder Progress
+        if (currentPage === 'manual') {
+            const orb = document.getElementById('manualProcessingOrb');
+            const text = document.querySelector('#manualResultPlaceholder .placeholder-text');
+            if (orb) orb.parentElement.classList.add('loading');
             if (text) {
                 text.textContent = "Generating";
                 text.classList.add('breathing-text');
@@ -130,15 +144,22 @@ function showProgress(show, percent = 0) {
     } else {
         progressContainer.classList.remove('active');
 
-        const orb = document.getElementById('singleProcessingOrb');
-        const text = document.querySelector('#singleResultPlaceholder .placeholder-text');
+        // Reset Single
+        const singleOrb = document.getElementById('singleProcessingOrb');
+        const singleText = document.querySelector('#singleResultPlaceholder .placeholder-text');
+        if (singleOrb) singleOrb.parentElement.classList.remove('loading');
+        if (singleText) {
+            singleText.textContent = "Result will appear here";
+            singleText.classList.remove('breathing-text');
+        }
 
-        if (orb) {
-            orb.parentElement.classList.remove('loading');
-            if (text) {
-                text.textContent = "Result will appear here";
-                text.classList.remove('breathing-text');
-            }
+        // Reset Manual
+        const manualOrb = document.getElementById('manualProcessingOrb');
+        const manualText = document.querySelector('#manualResultPlaceholder .placeholder-text');
+        if (manualOrb) manualOrb.parentElement.classList.remove('loading');
+        if (manualText) {
+            manualText.textContent = "Result will appear here";
+            manualText.classList.remove('breathing-text');
         }
     }
 }
@@ -397,15 +418,88 @@ function downloadBatchZip() {
 function setupManualPage() {
     setupDragDrop(dropZoneManual, fileInputManual, handleManualFile);
 
-    manualCtx = manualCanvas.getContext('2d');
+    manualCtx = manualCanvas.getContext('2d', { willReadFrequently: true });
+
+    // Brush cursor element
+    const brushCursor = document.getElementById('brushCursor');
 
     manualCanvas.addEventListener('mousedown', startDrawing);
-    manualCanvas.addEventListener('mousemove', draw);
+    manualCanvas.addEventListener('mousemove', (e) => {
+        draw(e);
+        // Update brush cursor position and size
+        if (brushCursor && manualImgHelper) {
+            const wrapperRect = manualCanvasWrapper.getBoundingClientRect();
+            const canvasRect = manualCanvas.getBoundingClientRect();
+            const size = parseInt(brushSizeInput.value);
+            // Scale brush size to match displayed canvas size
+            const scale = canvasRect.width / manualCanvas.width;
+            const displaySize = size * scale;
+            brushCursor.style.width = displaySize + 'px';
+            brushCursor.style.height = displaySize + 'px';
+            // Position relative to wrapper, accounting for canvas offset within wrapper
+            brushCursor.style.left = (canvasRect.left - wrapperRect.left + e.clientX - canvasRect.left) + 'px';
+            brushCursor.style.top = (canvasRect.top - wrapperRect.top + e.clientY - canvasRect.top) + 'px';
+        }
+    });
     manualCanvas.addEventListener('mouseup', stopDrawing);
-    manualCanvas.addEventListener('mouseout', stopDrawing);
+    manualCanvas.addEventListener('mouseout', () => {
+        stopDrawing();
+        if (brushCursor) brushCursor.style.display = 'none';
+    });
+    manualCanvas.addEventListener('mouseenter', () => {
+        if (brushCursor && manualImgHelper) brushCursor.style.display = 'block';
+    });
+
+    // Update cursor size when slider changes
+    brushSizeInput.addEventListener('input', () => {
+        if (brushCursor && manualImgHelper) {
+            const canvasRect = manualCanvas.getBoundingClientRect();
+            const size = parseInt(brushSizeInput.value);
+            const scale = canvasRect.width / manualCanvas.width;
+            brushCursor.style.width = (size * scale) + 'px';
+            brushCursor.style.height = (size * scale) + 'px';
+        }
+    });
+
+    // Undo last stroke
+    undoMaskBtn.addEventListener('click', () => {
+        if (strokeHistory.length === 0 || !manualImgHelper) return;
+        const prevCanvas = strokeHistory.pop();
+        const prevMask = maskStrokeHistory.pop();
+
+        manualCtx.putImageData(prevCanvas, 0, 0);
+        if (manualMaskCtx && prevMask) {
+            manualMaskCtx.putImageData(prevMask, 0, 0);
+        }
+    });
+
+    // Fullscreen toggle
+    fullscreenBtn.addEventListener('click', () => {
+        const wrapper = manualCanvasWrapper;
+        if (!document.fullscreenElement) {
+            wrapper.requestFullscreen().catch(err => {
+                console.log('Fullscreen error:', err);
+            });
+            fullscreenBtn.textContent = '⛶ Exit';
+        } else {
+            document.exitFullscreen();
+            fullscreenBtn.textContent = '⛶ Fullscreen';
+        }
+    });
+
+    // Listen for fullscreen change to update button text
+    document.addEventListener('fullscreenchange', () => {
+        if (!document.fullscreenElement) {
+            fullscreenBtn.textContent = '⛶ Fullscreen';
+        }
+    });
 
     clearMaskBtn.addEventListener('click', () => {
         if (!manualImgHelper) return;
+        // Save state before clear for potential undo
+        strokeHistory.push(manualCtx.getImageData(0, 0, manualCanvas.width, manualCanvas.height));
+        maskStrokeHistory.push(manualMaskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height));
+
         renderManualCanvas();
         if (manualMaskCtx) manualMaskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
     });
@@ -415,6 +509,10 @@ function setupManualPage() {
         manualImgHelper = null;
         manualCanvas.width = 300; manualCanvas.height = 150;
         manualCtx.clearRect(0, 0, 300, 150);
+
+        // Clear undo history
+        strokeHistory = [];
+        maskStrokeHistory = [];
 
         manualCanvasWrapper.classList.add('hidden');
         manualPlaceholder.classList.remove('hidden');
@@ -463,7 +561,7 @@ function handleManualFile(file) {
         maskCanvas = document.createElement('canvas');
         maskCanvas.width = img.width;
         maskCanvas.height = img.height;
-        manualMaskCtx = maskCanvas.getContext('2d');
+        manualMaskCtx = maskCanvas.getContext('2d', { willReadFrequently: true });
 
         renderManualCanvas();
     };
@@ -488,6 +586,17 @@ function getPointerPos(e) {
 function startDrawing(e) {
     e.stopPropagation(); // Prevent opening file picker
     if (!manualImgHelper) return;
+
+    // Save state before starting new stroke (for undo)
+    strokeHistory.push(manualCtx.getImageData(0, 0, manualCanvas.width, manualCanvas.height));
+    maskStrokeHistory.push(manualMaskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height));
+
+    // Limit history to 20 strokes to avoid memory issues
+    if (strokeHistory.length > 20) {
+        strokeHistory.shift();
+        maskStrokeHistory.shift();
+    }
+
     isDrawing = true;
     const { x, y } = getPointerPos(e);
     lastX = x;
