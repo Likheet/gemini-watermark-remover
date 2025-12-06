@@ -256,9 +256,7 @@ function setupBatchPage() {
         dropZoneBatch.classList.remove('drag-over');
         if (e.dataTransfer.files.length) handleBatchFiles(e.dataTransfer.files);
     });
-    fileInputBatch.addEventListener('change', (e) => {
-        if (e.target.files.length) handleBatchFiles(e.target.files);
-    });
+    // Note: change listener is already added by setupDragDrop
 
     processBtnBatch.addEventListener('click', processBatchQueue);
     clearBtnBatch.addEventListener('click', () => {
@@ -637,9 +635,11 @@ function setupDragDrop(zone, input, handler) {
         if (e.dataTransfer.files.length) handler(e.dataTransfer.files[0]);
     });
     zone.addEventListener('click', (e) => {
-        // Only allow click if it's within the upload-card (or specifically the upload-area)
+        // Allow click if it's within the upload-card OR the batch-drop-banner
         // and NOT on a button or input.
-        if (e.target.closest('.upload-card') && e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT' && !e.target.closest('#manualCanvasWrapper') && !e.target.closest('#manualCanvas')) {
+        const inUploadCard = e.target.closest('.upload-card');
+        const inBatchBanner = e.target.closest('.batch-drop-banner');
+        if ((inUploadCard || inBatchBanner) && e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT' && !e.target.closest('#manualCanvasWrapper') && !e.target.closest('#manualCanvas')) {
             input.click();
         }
     });

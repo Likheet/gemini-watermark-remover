@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Watermark Remover Dashboard</title>
+    <style>
+        :root {
+            --bg: #121212;
+            --surface: #1e1e1e;
+            --surface-hover: #2a2a2a;
+            --border: #333;
+            --text: #e0e0e0;
+            --text-muted: #888;
+            --primary: #ffffff;
+            --primary-fg: #000000;
+            --accent: #3b82f6;
+            --error: #ef4444;
+            --success: #10b981;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 14px;
+            line-height: 1.5;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        header {
+            padding: 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg);
+        }
+
+        header h1 {
+            font-size: 16px;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        /* Nav Bar */
+        .nav-bar {
+            display: flex;
+            justify-content: center;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 0 20px;
+            gap: 20px;
+        }
+
+        .nav-btn {
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--text-muted);
+            padding: 16px 24px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .nav-btn:hover {
+            color: var(--text);
+        }
+
+        .nav-btn.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+
+        /* Status & Progress */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 99px;
+            font-size: 12px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-muted);
+        }
+
+        .status-dot.active {
+            background: var(--success);
+            box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+        }
+
+        .status-dot.processing {
+            background: #f59e0b;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+
+            100% {
+                opacity: 1;
+            }
+        }
+
+        .progress-line-container {
+            height: 2px;
+            background: var(--surface);
+            width: 100%;
+            overflow: hidden;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+
+
+        /* Upload Card Styles */
+        .upload-card {
+            background: #09090b;
+            border: 1px solid #27272a;
+            border-radius: 12px;
+            padding: 24px;
+            width: 90%;
+            height: 90%;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            max-width: 600px;
+            max-height: 600px;
+            pointer-events: auto;
+            /* Re-enable interactions blocked by .full-center */
+            position: relative;
+            z-index: 10;
+        }
+
+        .upload-card-header h3 {
+            color: #fff;
+            font-size: 16px;
+            font-weight: 600;
+            margin: 0 0 4px 0;
+        }
+
+        .upload-card-header p {
+            color: #71717a;
+            font-size: 12px;
+            margin: 0;
+        }
+
+        .upload-area {
+            flex: 1;
+            /* Initial: Dashed, low opacity grey */
+            border: 1px dashed rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            background: #09090b;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            /* Timing: 0.3s ease */
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-area:hover,
+        .upload-area.drag-over {
+            /* Hover: Solid, Bright White */
+            border: 1px solid #ffffff;
+            /* Spotlight effect + Nav-like highlight */
+            background: #000;
+            color: #fff;
+            /* Match nav-btn hover text color shift if applicable */
+        }
+
+        /* Pseudo-element for smooth spotlight fade */
+        .upload-area::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at center, rgba(255, 255, 255, 0.08) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .upload-area:hover::before,
+        .upload-area.drag-over::before {
+            opacity: 1;
+        }
+
+        .upload-icon {
+            width: 48px;
+            height: 48px;
+            background: #18181b;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #e4e4e7;
+            position: relative;
+            z-index: 2;
+        }
+
+        .upload-icon svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        .upload-text {
+            text-align: center;
+            position: relative;
+            z-index: 2;
+        }
+
+        .upload-text strong {
+            display: block;
+            color: #fff;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        .upload-text span {
+            color: #71717a;
+            font-size: 12px;
+        }
+
+        .progress-line-container.active {
+            opacity: 1;
+        }
+
+        .progress-line {
+            height: 100%;
+            background: transparent;
+            width: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .progress-line::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: 50%;
+            background: linear-gradient(90deg, transparent, var(--success), transparent);
+            animation: indeterminateSlide 1.5s infinite ease-in-out;
+            transform: translateX(-150%);
+        }
+
+        /* Main Content */
+        main {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            background: var(--bg);
+        }
+
+        /* Batch Results Actions */
+        .batch-actions {
+            display: flex;
+            gap: 12px;
+            padding: 16px;
+            border-top: 1px solid var(--border);
+            justify-content: flex-end;
+            background: var(--surface);
+        }
+
+        /* Pages */
+        .page-container {
+            display: none;
+            width: 100%;
+            height: 100%;
+            padding: 24px 40px;
+            position: absolute;
+            /* Stack them */
+            top: 0;
+            left: 0;
+        }
+
+        .page-container.active {
+            display: flex;
+        }
+
+        /* Split View (Single/Manual) */
+        #pageSingle,
+        #pageManual {
+            gap: 30px;
+            align-items: stretch;
+            justify-content: center;
+        }
+
+        .split-view {
+            display: flex;
+            gap: 24px;
+            height: 100%;
+            width: 100%;
+            max-height: 80vh;
+            /* Keep within view */
+        }
+
+        .pane {
+            flex: 1;
+            background: #000;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .pane-header {
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid var(--border);
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .pane-content {
+            flex: 1;
+            position: relative;
+            background: #0f0f0f;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .pane-controls {
+            padding: 16px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            background: var(--surface);
+        }
+
+        /* Generic Center Placeholder */
+        .full-center {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            pointer-events: none;
+            z-index: 5;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Processing Orb State */
+        .loading-orb {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            z-index: 1;
+            display: none;
+            /* Container for the effect */
+        }
+
+        .full-center.loading .loading-orb {
+            display: block;
+            animation: orbBreathe 3s ease-in-out infinite;
+        }
+
+        /* The glowing swirling gradient */
+        .loading-orb::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            border-radius: 50%;
+            background: conic-gradient(from 0deg,
+                    #000000,
+                    #4b0082,
+                    #ff00ff,
+                    #4b0082,
+                    #000000);
+            filter: blur(20px);
+            opacity: 0.8;
+            animation: orbSpin 2s linear infinite;
+        }
+
+        /* Animations */
+        @keyframes orbSpin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Image/Canvas display */
+        .preview-img-full {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Buttons & Inputs */
+        button {
+            padding: 10px 20px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text);
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        button:hover:not(:disabled) {
+            background: var(--surface-hover);
+            border-color: #555;
+        }
+
+        /* Ensure text is on top */
+        .placeholder-text {
+            position: relative;
+            z-index: 10;
+            font-weight: 500;
+        }
+
+        .breathing-text {
+            /* Darker text gradient as requested */
+            background: linear-gradient(110deg, rgba(255, 255, 255, 0.4) 30%, #a1a1aa 50%, rgba(255, 255, 255, 0.4) 70%);
+            background-size: 200% 100%;
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: transparent;
+            animation: shimmerText 2.5s linear infinite;
+        }
+
+        @keyframes shimmerText {
+            0% {
+                background-position: 200% 0;
+            }
+
+            100% {
+                background-position: -200% 0;
+            }
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        button.primary {
+            background: var(--primary);
+            color: var(--primary-fg);
+            border-color: var(--primary);
+        }
+
+        button.primary:hover:not(:disabled) {
+            background: #ccc;
+        }
+
+        .btn-text {
+            background: transparent;
+            border: none;
+            padding: 4px 8px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .btn-text:hover {
+            color: var(--text);
+            background: transparent;
+        }
+
+        /* Batch Mode Styles */
+        #pageBatch {
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .batch-drop-banner {
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.02);
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .batch-drop-banner:hover,
+        .batch-drop-banner.drag-over {
+            border-color: var(--primary);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .queue-container {
+            /* Full height list */
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .queue-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            padding: 12px;
+            border-radius: 8px;
+        }
+
+        .queue-item.done {
+            border-color: var(--success);
+        }
+
+        .queue-item.processing {
+            border-color: var(--accent);
+        }
+
+        .queue-thumb {
+            width: 50px;
+            height: 50px;
+            border-radius: 4px;
+            object-fit: cover;
+            background: #000;
+        }
+
+        .queue-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .queue-name {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-weight: 500;
+        }
+
+        .queue-status {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        /* Manual Mode Toolbar */
+        .tools-overlay {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #222;
+            border: 1px solid var(--border);
+            border-radius: 30px;
+            padding: 8px 20px;
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            z-index: 20;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>Watermark Remover</h1>
+        <div class="status-badge">
+            <div id="statusDot" class="status-dot"></div>
+            <span id="statusText">Ready</span>
+        </div>
+    </header>
+
+    <div class="nav-bar">
+        <button class="nav-btn active" data-page="single">Single Image</button>
+        <button class="nav-btn" data-page="batch">Batch Queue</button>
+        <button class="nav-btn" data-page="manual">Manual Mask</button>
+    </div>
+
+    <div id="progressContainer" class="progress-line-container">
+        <div id="progressLine" class="progress-line"></div>
+    </div>
+
+    <main>
+        <!-- PAGE 1: Single Mode -->
+        <div id="pageSingle" class="page-container active">
+            <div class="split-view">
+                <!-- Input Pane -->
+                <div class="pane">
+                    <div class="pane-header">
+                        <span>Original</span>
+                        <button id="clearBtnSingle" class="btn-text">Clear</button>
+                    </div>
+                    <div class="pane-content" id="dropZoneSingle">
+                        <div class="full-center" id="singlePlaceholder">
+                            <div class="upload-card">
+                                <div class="upload-card-header">
+                                    <h3>Image Upload</h3>
+                                    <p>Supported formats: JPG, PNG, GIF</p>
+                                </div>
+                                <div class="upload-area">
+                                    <div class="upload-icon">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
+                                            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                            stroke-linecap="round" stroke-linejoin="round">
+                                            <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                                            <circle cx="9" cy="9" r="2" />
+                                            <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+                                            <path d="m14 14.5.5.5" />
+                                        </svg>
+                                    </div>
+                                    <div class="upload-text">
+                                        <strong>Click to select</strong>
+                                        <span>or drag and drop file here</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <img id="previewImageSingle" class="preview-img-full hidden">
+                        <input type="file" id="fileInputSingle" accept="image/*" hidden>
+                    </div>
+                    <div class="pane-controls">
+                        <button id="processBtnSingle" class="primary" disabled>Remove Watermark</button>
+                    </div>
+                </div>
+
+                <!-- Output Pane -->
+                <div class="pane">
+                    <div class="pane-header">Result</div>
+                    <div class="pane-content">
+                        <div class="full-center" id="singleResultPlaceholder">
+                            <div class="placeholder-text">Result will appear here</div>
+                            <div class="loading-orb" id="singleProcessingOrb"></div>
+                        </div>
+                        <canvas id="resultCanvasSingle" class="preview-img-full hidden"></canvas>
+                    </div>
+                    <div class="pane-controls">
+                        <button id="downloadBtnSingle" class="primary" disabled>Download</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PAGE 2: Batch Mode -->
+        <div id="pageBatch" class="page-container">
+            <div class="batch-drop-banner" id="dropZoneBatch">
+                <h3>Batch Upload</h3>
+                <p style="color:var(--text-muted); margin-top:4px;">Drag & drop multiple images here to add them to
+                    queue</p>
+                <input type="file" id="fileInputBatch" accept="image/*" multiple hidden>
+            </div>
+
+            <div class="pane" style="flex:1; background:var(--surface);">
+                <div class="pane-header">
+                    <span>Queue</span>
+                    <div style="display:flex; gap:10px;">
+                        <button id="processBtnBatch" class="primary" disabled>Start Batch</button>
+                        <button id="clearBtnBatch" class="btn-text">Clear All</button>
+                    </div>
+                </div>
+                <!-- Queue List -->
+                <div id="queueContainer" class="queue-container"></div>
+
+                <!-- Batch Results Actions -->
+                <div id="batchActions" class="batch-actions hidden">
+                    <button id="downloadAllBtn" class="primary">Download All</button>
+                    <button id="downloadZipBtn" class="primary">Download ZIP</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- PAGE 3: Manual Mode -->
+        <div id="pageManual" class="page-container">
+            <div class="split-view">
+                <!-- Input/Draw Pane -->
+                <div class="pane">
+                    <div class="pane-header">
+                        <span>Draw Mask</span>
+                        <button id="resetManualBtn" class="btn-text">New Image</button>
+                    </div>
+                    <div class="pane-content" id="dropZoneManual">
+                        <div class="full-center" id="manualPlaceholder">
+                            <div class="upload-card">
+                                <div class="upload-card-header">
+                                    <h3>Image Upload</h3>
+                                    <p>Supported formats: JPG, PNG, GIF</p>
+                                </div>
+                                <div class="upload-area">
+                                    <div class="upload-icon">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
+                                            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                            stroke-linecap="round" stroke-linejoin="round">
+                                            <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                                            <circle cx="9" cy="9" r="2" />
+                                            <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+                                            <path d="m14 14.5.5.5" />
+                                        </svg>
+                                    </div>
+                                    <div class="upload-text">
+                                        <strong>Click to select</strong>
+                                        <span>or drag and drop file here</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Canvas Wrapper for Manual drawing -->
+                        <div id="manualCanvasWrapper" class="full-center hidden"
+                            style="width:100%; height:100%; position:relative;">
+                            <canvas id="manualCanvas"></canvas>
+
+                            <!-- Floating Toolbar -->
+                            <div class="tools-overlay">
+                                <span class="tool-lbl">Brush Size</span>
+                                <input type="range" id="brushSize" min="5" max="100" value="20" style="width:100px;">
+                                <button id="clearMaskBtn" class="btn-text" style="color:#ef4444;">Clear Stroke</button>
+                            </div>
+                        </div>
+                        <input type="file" id="fileInputManual" accept="image/*" hidden>
+                    </div>
+                    <div class="pane-controls">
+                        <button id="processBtnManual" class="primary" disabled>Remove Object</button>
+                    </div>
+                </div>
+
+                <!-- Output Pane -->
+                <div class="pane">
+                    <div class="pane-header">Result</div>
+                    <div class="pane-content">
+                        <div class="full-center" id="manualResultPlaceholder">
+                            <p>Result will appear here</p>
+                        </div>
+                        <img id="manualResultImg" class="preview-img-full hidden">
+                    </div>
+                    <div class="pane-controls">
+                        <button id="downloadBtnManual" class="primary" disabled>Download</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Import ONNX Runtime & JSZip -->
+    <script src="lib/ort.min.js"></script>
+    <script src="lib/jszip.min.js"></script>
+    <script src="script.js"></script>
+</body>
+
+</html>

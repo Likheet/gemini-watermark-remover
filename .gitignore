@@ -1,5 +1,32 @@
-/.gradio
-/.venv
+# General
+.DS_Store
+Thumbs.db
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.spec
+
+# Gradio
+.gradio/
+
+# IDE
+.vscode/
+.idea/
+
+# Previous specific ignores (Preserving these)
 /lama.py
 /lama_inpaint.py
-/__pycache__
+
+# Node / Web (if needed in future)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dist/
+build/
