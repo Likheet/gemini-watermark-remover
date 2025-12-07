@@ -1440,15 +1440,21 @@ async function processAllImages() {
 
 console.log('Star Mark Remover loaded on:', window.location.href);
 
-// Conditionally preload the model based on user setting
-// Off by default to avoid impacting users with slow PCs or limited bandwidth
-setTimeout(() => {
-  chrome.storage.local.get(['preloadModel'], (result) => {
-    if (result.preloadModel === true) {
-      // Silent preload - don't show notification
-      loadModel(true).catch(err => {
-        console.log('[StarMarkRemover] Background preload skipped:', err.message);
-      });
-    }
-  });
-}, 2000);
+// Auto-preload model only on sites where star marks are commonly found
+// This avoids impacting users on other sites
+const PRELOAD_SITES = [
+  'gemini.google.com',
+  'aistudio.google.com'
+];
+
+const currentHost = window.location.hostname;
+const shouldPreload = PRELOAD_SITES.some(site => currentHost.includes(site));
+
+if (shouldPreload) {
+  setTimeout(() => {
+    // Silent preload - don't show notification
+    loadModel(true).catch(err => {
+      console.log('[StarMarkRemover] Background preload skipped:', err.message);
+    });
+  }, 2000);
+}
