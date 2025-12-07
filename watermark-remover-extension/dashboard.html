@@ -848,6 +848,38 @@
             height: 16px;
         }
     </style>
+    <style>
+        .app-footer {
+            padding: 12px 24px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+            background: var(--bg);
+            color: var(--text-muted);
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .marketing-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+
+        .marketing-badge:hover {
+            opacity: 1;
+            color: var(--text);
+        }
+
+        .marketing-badge svg {
+            width: 14px;
+            height: 14px;
+            color: var(--primary);
+        }
+    </style>
 </head>
 
 <body>
@@ -1094,6 +1126,40 @@
             </div>
         </div>
     </div>
+
+    <footer class="app-footer">
+        <div class="marketing-badge" title="Runs 100% locally on your device">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+            <span>100% Local</span>
+        </div>
+        <div class="marketing-badge" title="Your data is secure">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            </svg>
+            <span>Privacy & Security</span>
+        </div>
+        <div class="marketing-badge" title="No data is collected or sent">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path
+                    d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                <line x1="1" y1="1" x2="23" y2="23" />
+            </svg>
+            <span>Zero Data Collection</span>
+        </div>
+        <div class="marketing-badge">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="16 18 22 12 16 6" />
+                <polyline points="8 6 2 12 8 18" />
+            </svg>
+            <span>Open Source</span>
+        </div>
+    </footer>
 
     <script src="dashboard.js"></script>
 </body>

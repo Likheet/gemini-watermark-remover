@@ -692,6 +692,39 @@
             background: rgba(255, 255, 255, 0.1);
         }
     </style>
+    <style>
+        .app-footer {
+            padding: 12px 24px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+            background: var(--bg);
+            color: var(--text-muted);
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .marketing-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+
+        .marketing-badge:hover {
+            opacity: 1;
+            color: var(--text);
+        }
+
+        .marketing-badge svg {
+            width: 14px;
+            height: 14px;
+            color: var(--primary);
+            /* white in this file's root */
+        }
+    </style>
 </head>
 
 <body>
@@ -879,12 +912,251 @@
                 </div>
             </div>
         </div>
-    </main>
+        ```html
+        }
 
-    <!-- Import ONNX Runtime & JSZip -->
-    <script src="lib/ort.min.js"></script>
-    <script src="lib/jszip.min.js"></script>
-    <script src="script.js"></script>
-</body>
+        .marketing-badge svg {
+        width: 14px;
+        height: 14px;
+        color: var(--primary); /* white in this file's root */
+        }
+
+        .app-footer {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 20px;
+        padding: 20px;
+        background-color: var(--surface);
+        border-top: 1px solid var(--border);
+        flex-wrap: wrap;
+        margin-top: auto; /* Push footer to the bottom */
+        }
+
+        .app-footer .marketing-badge {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-muted);
+        font-size: 0.9em;
+        white-space: nowrap;
+        }
+        </style>
+        </head>
+
+        <body>
+            <header>
+                <h1>Star Mark Remover</h1>
+                <div class="status-badge">
+                    <div id="statusDot" class="status-dot"></div>
+                    <span id="statusText">Ready</span>
+                </div>
+            </header>
+
+            <div class="nav-bar">
+                <button class="nav-btn active" data-page="single">Single Image</button>
+                <button class="nav-btn" data-page="batch">Batch Queue</button>
+                <button class="nav-btn" data-page="manual">Manual Mask</button>
+            </div>
+
+            <div id="progressContainer" class="progress-line-container">
+                <div id="progressLine" class="progress-line"></div>
+            </div>
+
+            <main>
+                <!-- PAGE 1: Single Mode -->
+                <div id="pageSingle" class="page-container active">
+                    <div class="split-view">
+                        <!-- Input Pane -->
+                        <div class="pane">
+                            <div class="pane-header">
+                                <span>Original</span>
+                                <button id="clearBtnSingle" class="btn-text">Clear</button>
+                            </div>
+                            <div class="pane-content" id="dropZoneSingle">
+                                <div class="full-center" id="singlePlaceholder">
+                                    <div class="upload-card">
+                                        <div class="upload-card-header">
+                                            <h3>Image Upload</h3>
+                                            <p>Supported formats: JPG, PNG, GIF</p>
+                                        </div>
+                                        <div class="upload-area">
+                                            <div class="upload-icon">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
+                                                    viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                                                    <circle cx="9" cy="9" r="2" />
+                                                    <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+                                                    <path d="m14 14.5.5.5" />
+                                                </svg>
+                                            </div>
+                                            <div class="upload-text">
+                                                <strong>Click to select</strong>
+                                                <span>or drag and drop file here</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <img id="previewImageSingle" class="preview-img-full hidden">
+                                <input type="file" id="fileInputSingle" accept="image/*" hidden>
+                            </div>
+                            <div class="pane-controls">
+                                <button id="processBtnSingle" class="primary" disabled>Remove Star Mark</button>
+                            </div>
+                        </div>
+
+                        <!-- Output Pane -->
+                        <div class="pane">
+                            <div class="pane-header">Result</div>
+                            <div class="pane-content">
+                                <div class="full-center" id="singleResultPlaceholder">
+                                    <div class="placeholder-text">Result will appear here</div>
+                                    <div class="loading-orb" id="singleProcessingOrb"></div>
+                                </div>
+                                <canvas id="resultCanvasSingle" class="preview-img-full hidden"></canvas>
+                            </div>
+                            <div class="pane-controls">
+                                <button id="downloadBtnSingle" class="primary" disabled>Download</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PAGE 2: Batch Mode -->
+                <div id="pageBatch" class="page-container">
+                    <div class="batch-drop-banner" id="dropZoneBatch">
+                        <h3>Batch Upload</h3>
+                        <p style="color:var(--text-muted); margin-top:4px;">Drag & drop multiple images here to add them
+                            to
+                            queue</p>
+                        <input type="file" id="fileInputBatch" accept="image/*" multiple hidden>
+                    </div>
+
+                    <div class="pane" style="flex:1; background:var(--surface);">
+                        <div class="pane-header">
+                            <span>Queue</span>
+                            <div style="display:flex; gap:10px;">
+                                <button id="processBtnBatch" class="primary" disabled>Start Batch</button>
+                                <button id="clearBtnBatch" class="btn-text">Clear All</button>
+                            </div>
+                        </div>
+                        <!-- Queue List -->
+                        <div id="queueContainer" class="queue-container"></div>
+
+                        <!-- Batch Results Actions -->
+                        <div id="batchActions" class="batch-actions hidden">
+                            <button id="downloadAllBtn" class="primary">Download All</button>
+                            <button id="downloadZipBtn" class="primary">Download ZIP</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PAGE 3: Manual Mode -->
+                <div id="pageManual" class="page-container" style="flex-direction:column; gap:20px;">
+                    <div id="manualWarningBanner" class="manual-warning-banner hidden">
+                        <span style="font-size:18px;">⚠️</span>
+                        <p><strong>Note:</strong> Manual Mode is designed for removing small star marks and simple
+                            text.<br>It
+                            is NOT intended for removing large objects or complex backgrounds.</p>
+                        <button id="closeManualWarning" class="manual-warning-close" title="Dismiss forever">✕</button>
+                    </div>
+
+                    <div class="split-view">
+                        <!-- Input/Draw Pane -->
+                        <div class="pane">
+                            <div class="pane-header">
+                                <span>Draw Mask</span>
+                                <div class="header-tools">
+                                    <span class="tool-lbl">Brush</span>
+                                    <input type="range" id="brushSize" min="5" max="100" value="20" style="width:80px;">
+                                    <button id="undoMaskBtn" class="btn-text" title="Undo last stroke">↩ Undo</button>
+                                    <button id="clearMaskBtn" class="btn-text" style="color:#ef4444;">Clear</button>
+                                    <button id="fullscreenBtn" class="btn-text" title="Enter fullscreen">⛶
+                                        Fullscreen</button>
+                                    <button id="resetManualBtn" class="btn-text">New</button>
+                                </div>
+                            </div>
+                            <div class="pane-content" id="dropZoneManual">
+                                <div class="full-center" id="manualPlaceholder">
+                                    <div class="upload-card">
+                                        <div class="upload-card-header">
+                                            <h3>Image Upload</h3>
+                                            <p>Supported formats: JPG, PNG, GIF</p>
+                                        </div>
+                                        <div class="upload-area">
+                                            <div class="upload-icon">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
+                                                    viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                                                    <circle cx="9" cy="9" r="2" />
+                                                    <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+                                                    <path d="m14 14.5.5.5" />
+                                                </svg>
+                                            </div>
+                                            <div class="upload-text">
+                                                <strong>Click to select</strong>
+                                                <span>or drag and drop file here</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Canvas Wrapper for Manual drawing -->
+                                <div id="manualCanvasWrapper" class="full-center hidden"
+                                    style="width:100%; height:100%; position:relative;">
+                                    <canvas id="manualCanvas"></canvas>
+                                    <!-- Brush cursor indicator -->
+                                    <div id="brushCursor" class="brush-cursor"></div>
+                                </div>
+                                <input type="file" id="fileInputManual" accept="image/*" hidden>
+                            </div>
+                            <div class="pane-controls">
+                                <button id="processBtnManual" class="primary" disabled>Remove Object</button>
+                            </div>
+                        </div>
+
+                        <!-- Output Pane -->
+                        <div class="pane">
+                            <div class="pane-header">Result</div>
+                            <div class="pane-content">
+                                <div class="full-center" id="manualResultPlaceholder">
+                                    <div class="placeholder-text">Result will appear here</div>
+                                    <div class="loading-orb" id="manualProcessingOrb"></div>
+                                </div>
+                                <img id="manualResultImg" class="preview-img-full hidden">
+                            </div>
+                            <div class="pane-controls">
+                                <button id="downloadBtnManual" class="primary" disabled>Download</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+            <!-- Import ONNX Runtime & JSZip -->
+            <script src="lib/ort.min.js"></script>
+            <script src="lib/jszip.min.js"></script>
+            <footer class="app-footer">
+                <div class="marketing-badge" title="Runs 100% locally on your device">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" </svg>
+                        <span>Zero Data Collection</span>
+                </div>
+                <a href="https://github.com/Likheet/gemini-watermark-remover" target="_blank"
+                    style="text-decoration:none; color:inherit;">
+                    <div class="marketing-badge">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="16 18 22 12 16 6" />
+                            <polyline points="8 6 2 12 8 18" />
+                        </svg>
+                        <span>Open Source</span>
+                    </div>
+                </a>
+            </footer>
+
+            <script src="script.js"></script>
+        </body>
 
 </html>
+```
