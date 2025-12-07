@@ -1,4 +1,4 @@
-// Dashboard script for Watermark Remover - 3-Page Redesign
+// Dashboard script for Star Mark Remover - 3-Page Redesign
 // Uses Web Worker for non-blocking processing
 
 // --- Elements ---

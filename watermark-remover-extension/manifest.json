@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Gemini Watermark Remover",
+  "name": "Star Mark Remover",
   "version": "1.0.0",
-  "description": "Remove Gemini star watermarks from AI-generated images using MI-GAN inpainting",
+  "description": "Remove star marks from AI-generated images using MI-GAN inpainting",
   "permissions": [
     "activeTab",
     "contextMenus",

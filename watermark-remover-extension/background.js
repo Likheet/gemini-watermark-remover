@@ -1,16 +1,16 @@
-// Background service worker for Gemini Watermark Remover
+// Background service worker for Star Mark Remover
 
 // Initialize context menu
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     id: 'removeWatermark',
-    title: 'Remove Gemini Watermark',
+    title: 'Remove Star Mark',
     contexts: ['image']
   });
 
   chrome.contextMenus.create({
     id: 'removeWatermarkAll',
-    title: 'Remove Watermark from All Images',
+    title: 'Remove Star Mark from All Images',
     contexts: ['page', 'selection']
   });
 

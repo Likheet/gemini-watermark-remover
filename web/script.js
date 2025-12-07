@@ -1,4 +1,4 @@
-// Dashboard script for Watermark Remover - Web Version
+// Dashboard script for Star Mark Remover - Web Version
 // Uses Web Worker for non-blocking processing
 
 // --- Elements ---

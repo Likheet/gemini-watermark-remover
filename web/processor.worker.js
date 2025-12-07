@@ -163,7 +163,7 @@ function templateMatchNCC(roiGray, roiW, roiH, template, templateSize) {
     return { maxVal, maxLoc };
 }
 
-// Detect star watermark - Exact port of main.py's detect_star_watermark
+// Detect star mark - Exact port of main.py's detect_star_watermark
 function detectStarWatermark(imageDataArr, width, height) {
     // Convert to grayscale (matching cv2.cvtColor)
     const gray = new Uint8Array(width * height);
@@ -190,7 +190,7 @@ function detectStarWatermark(imageDataArr, width, height) {
 
     const baseTemplate = createStarTemplate(48);
 
-    // Scales: 8 values optimized for common watermark sizes (faster than 10)
+    // Scales: 8 values optimized for common star mark sizes (faster than 10)
     const scales = [0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.7, 2.0];
 
     let bestVal = 0;
@@ -211,7 +211,7 @@ function detectStarWatermark(imageDataArr, width, height) {
         if (bestVal > 0.7) break;
     }
 
-    console.log(`[WatermarkDetect] Best score: ${bestVal.toFixed(3)}`);
+    console.log(`[StarMarkDetect] Best score: ${bestVal.toFixed(3)}`);
 
     const mask = new Uint8Array(width * height);
 
@@ -272,9 +272,9 @@ function detectStarWatermark(imageDataArr, width, height) {
             }
         }
 
-        console.log(`[WatermarkDetect] DETECTED star at (${starX},${starY}) size ${bestSize}x${bestSize}`);
+        console.log(`[StarMarkDetect] DETECTED star at (${starX},${starY}) size ${bestSize}x${bestSize}`);
     } else {
-        console.log(`[WatermarkDetect] Score too low (${bestVal.toFixed(3)}), using fallback`);
+        console.log(`[StarMarkDetect] Score too low (${bestVal.toFixed(3)}), using fallback`);
 
         // Fallback (matching main.py)
         const starSize = Math.max(20, Math.min(50, Math.round(Math.min(width, height) * 0.02)));
@@ -351,7 +351,7 @@ async function processImage(inputImageData, width, height, userMask = null) {
             mask[i] = (userMask[i * 4 + 3] > 0) ? 255 : 0;
         }
     } else {
-        postMessage({ type: 'status', message: 'Scanning for watermark...' });
+        postMessage({ type: 'status', message: 'Scanning for star mark...' });
         const detection = detectStarWatermark(imageData, width, height);
         mask = detection.mask;
     }
@@ -441,7 +441,7 @@ async function processImage(inputImageData, width, height, userMask = null) {
         inputData[3 * area + i] = b * (1 - m);
     }
 
-    postMessage({ type: 'status', message: 'Removing watermark (AI Inference)...' });
+    postMessage({ type: 'status', message: 'Removing star mark (AI Inference)...' });
     const inputTensor = new ort.Tensor('float32', inputData, [1, 4, targetSize, targetSize]);
     const feeds = {};
     feeds[modelInputName] = inputTensor;

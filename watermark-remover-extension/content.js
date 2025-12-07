@@ -1,4 +1,4 @@
-// Content script for Gemini Watermark Remover
+// Content script for Star Mark Remover
 // Handles image processing on web pages - Ported from Python MI-GAN implementation
 
 let modelSession = null;
@@ -13,11 +13,11 @@ const DEBUG_MASK_DOWNLOAD = false;
 // Check if ONNX Runtime is available (loaded via manifest)
 function checkONNXRuntime() {
   if (typeof ort !== 'undefined') {
-    console.log('[WatermarkRemover] ONNX Runtime is available');
+    console.log('[StarMarkRemover] ONNX Runtime is available');
     return true;
   }
 
-  console.error('[WatermarkRemover] ONNX Runtime not loaded');
+  console.error('[StarMarkRemover] ONNX Runtime not loaded');
 
   return false;
 
@@ -87,7 +87,7 @@ async function loadModel() {
 
     ort.env.wasm.numThreads = 1;
 
-    console.log('[WatermarkRemover] WASM path:', wasmPath);
+    console.log('[StarMarkRemover] WASM path:', wasmPath);
 
 
 
@@ -95,7 +95,7 @@ async function loadModel() {
 
 
 
-    console.log('[WatermarkRemover] Loading MI-GAN model from:', modelUrl);
+    console.log('[StarMarkRemover] Loading MI-GAN model from:', modelUrl);
 
     modelSession = await ort.InferenceSession.create(modelUrl, {
 
@@ -113,9 +113,9 @@ async function loadModel() {
 
 
 
-    console.log('[WatermarkRemover] Model input name:', modelInputName);
+    console.log('[StarMarkRemover] Model input name:', modelInputName);
 
-    console.log('[WatermarkRemover] Model output name:', modelOutputName);
+    console.log('[StarMarkRemover] Model output name:', modelOutputName);
 
 
 
@@ -123,13 +123,13 @@ async function loadModel() {
 
     isModelLoading = false;
 
-    console.log('[WatermarkRemover] MI-GAN model loaded successfully!');
+    console.log('[StarMarkRemover] MI-GAN model loaded successfully!');
 
     showNotification('AI model loaded!');
 
   } catch (error) {
 
-    console.error('[WatermarkRemover] Failed to load model:', error);
+    console.error('[StarMarkRemover] Failed to load model:', error);
 
     isModelLoaded = false;
 
@@ -337,7 +337,7 @@ function templateMatchNCC(roiGray, roiW, roiH, template, templateSize) {
 }
 
 
-// Detect star watermark - Exact port of main.py's detect_star_watermark
+// Detect star mark - Exact port of main.py's detect_star_watermark
 function detectStarWatermark(imageData, width, height) {
   // Convert to grayscale (matching cv2.cvtColor)
   const gray = new Uint8Array(width * height);
@@ -364,7 +364,7 @@ function detectStarWatermark(imageData, width, height) {
 
   const baseTemplate = createStarTemplate(48);
 
-  // Scales: 8 values optimized for common watermark sizes (faster than 10)
+  // Scales: 8 values optimized for common star mark sizes (faster than 10)
   const scales = [0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.7, 2.0];
 
   let bestVal = 0;
@@ -385,7 +385,7 @@ function detectStarWatermark(imageData, width, height) {
     if (bestVal > 0.7) break;
   }
 
-  console.log(`[WatermarkDetect] Best score: ${bestVal.toFixed(3)}`);
+  console.log(`[StarMarkDetect] Best score: ${bestVal.toFixed(3)}`);
 
   const mask = new Uint8Array(width * height);
 
@@ -446,9 +446,9 @@ function detectStarWatermark(imageData, width, height) {
       }
     }
 
-    console.log(`[WatermarkDetect] DETECTED star at (${starX},${starY}) size ${bestSize}x${bestSize}`);
+    console.log(`[StarMarkDetect] DETECTED star at (${starX},${starY}) size ${bestSize}x${bestSize}`);
   } else {
-    console.log(`[WatermarkDetect] Score too low (${bestVal.toFixed(3)}), using fallback`);
+    console.log(`[StarMarkDetect] Score too low (${bestVal.toFixed(3)}), using fallback`);
 
     // Fallback (matching main.py)
     const starSize = Math.max(20, Math.min(50, Math.round(Math.min(width, height) * 0.02)));
@@ -608,8 +608,8 @@ async function inpaint(imageCanvas) {
   let maskSum = 0;
   for (let i = 0; i < mask.length; i++) maskSum += mask[i];
   if (maskSum === 0) {
-    console.warn('[WatermarkRemover] No mask detected, returning original');
-    showNotification('No watermark detected');
+    console.warn('[StarMarkRemover] No mask detected, returning original');
+    showNotification('No star mark detected');
     return imageCanvas;
 
   }
@@ -660,7 +660,7 @@ async function inpaint(imageCanvas) {
 
 
 
-  console.log(`[WatermarkRemover] Crop region: (${minX},${minY}) to (${maxX},${maxY}), size: ${cropW}x${cropH}`);
+  console.log(`[StarMarkRemover] Crop region: (${minX},${minY}) to (${maxX},${maxY}), size: ${cropW}x${cropH}`);
 
 
 
@@ -784,7 +784,7 @@ async function inpaint(imageCanvas) {
 
 
 
-  console.log('[WatermarkRemover] Running MI-GAN inference...');
+  console.log('[StarMarkRemover] Running MI-GAN inference...');
 
   const inputTensor = new ort.Tensor('float32', inputData, [1, 4, targetSize, targetSize]);
 
@@ -804,7 +804,7 @@ async function inpaint(imageCanvas) {
 
   const outDims = results[modelOutputName].dims;
 
-  console.log('[WatermarkRemover] Inference complete, output shape:', outDims);
+  console.log('[StarMarkRemover] Inference complete, output shape:', outDims);
 
 
 
@@ -971,7 +971,7 @@ async function inpaint(imageCanvas) {
 
 
 
-  console.log('[WatermarkRemover] Inpainting complete!');
+  console.log('[StarMarkRemover] Inpainting complete!');
 
   return resultCanvas;
 
@@ -985,7 +985,7 @@ async function inpaint(imageCanvas) {
 
 async function fetchImageAsBlob(url) {
 
-  console.log('[WatermarkRemover] Fetching image:', url);
+  console.log('[StarMarkRemover] Fetching image:', url);
 
 
 
@@ -1025,13 +1025,13 @@ async function fetchImageAsBlob(url) {
 
     });
 
-    console.log('[WatermarkRemover] Fetched via background script');
+    console.log('[StarMarkRemover] Fetched via background script');
 
     return blob;
 
   } catch (bgError) {
 
-    console.log('[WatermarkRemover] Background fetch failed:', bgError.message);
+    console.log('[StarMarkRemover] Background fetch failed:', bgError.message);
 
   }
 
@@ -1045,7 +1045,7 @@ async function fetchImageAsBlob(url) {
 
     if (response.ok) {
 
-      console.log('[WatermarkRemover] Fetched via direct CORS request');
+      console.log('[StarMarkRemover] Fetched via direct CORS request');
 
       return await response.blob();
 
@@ -1053,7 +1053,7 @@ async function fetchImageAsBlob(url) {
 
   } catch (e) {
 
-    console.log('[WatermarkRemover] Direct fetch failed:', e.message);
+    console.log('[StarMarkRemover] Direct fetch failed:', e.message);
 
   }
 
@@ -1068,7 +1068,7 @@ async function fetchImageAsBlob(url) {
 // Process a single image
 
 async function processImage(imageUrl, options = { silent: false }) {
-  console.log('[WatermarkRemover] processImage called with:', imageUrl);
+  console.log('[StarMarkRemover] processImage called with:', imageUrl);
 
   if (!imageUrl) {
     if (!options.silent) showNotification('Error: No image URL');
@@ -1114,7 +1114,7 @@ async function processImage(imageUrl, options = { silent: false }) {
 
     if (imgElement && imgElement.complete && imgElement.naturalWidth > 0) {
 
-      console.log('[WatermarkRemover] Found image element:', imgElement.naturalWidth, 'x', imgElement.naturalHeight);
+      console.log('[StarMarkRemover] Found image element:', imgElement.naturalWidth, 'x', imgElement.naturalHeight);
 
 
 
@@ -1136,11 +1136,11 @@ async function processImage(imageUrl, options = { silent: false }) {
 
         ctx.getImageData(0, 0, 1, 1);
 
-        console.log('[WatermarkRemover] Successfully drew image from element');
+        console.log('[StarMarkRemover] Successfully drew image from element');
 
       } catch (e) {
 
-        console.log('[WatermarkRemover] Canvas tainted, will fetch via background script');
+        console.log('[StarMarkRemover] Canvas tainted, will fetch via background script');
 
         canvas = null;
 
@@ -1154,7 +1154,7 @@ async function processImage(imageUrl, options = { silent: false }) {
 
     if (!canvas) {
 
-      console.log('[WatermarkRemover] Fetching image via background script...');
+      console.log('[StarMarkRemover] Fetching image via background script...');
 
       const blob = await fetchImageAsBlob(imageUrl);
 
@@ -1190,7 +1190,7 @@ async function processImage(imageUrl, options = { silent: false }) {
 
       URL.revokeObjectURL(blobUrl);
 
-      console.log('[WatermarkRemover] Image loaded from blob:', img.width, 'x', img.height);
+      console.log('[StarMarkRemover] Image loaded from blob:', img.width, 'x', img.height);
 
     }
 
@@ -1212,7 +1212,7 @@ async function processImage(imageUrl, options = { silent: false }) {
 
 
 
-    if (!options.silent) showNotification('Removing watermark...');
+    if (!options.silent) showNotification('Removing star mark...');
 
     const result = await inpaint(canvas);
 
@@ -1243,7 +1243,7 @@ async function processImage(imageUrl, options = { silent: false }) {
       }
       maskCtx.putImageData(overlay, 0, 0);
       const maskDataUrl = maskCanvas.toDataURL('image/png');
-      downloadImage(maskDataUrl, 'watermark-mask-debug.png');
+      downloadImage(maskDataUrl, 'star-mark-debug.png');
     }
 
 
@@ -1257,10 +1257,10 @@ async function processImage(imageUrl, options = { silent: false }) {
 
     if (useJpeg) {
       dataUrl = result.toDataURL('image/jpeg', quality);
-      filename = `watermark-removed-${timestamp}.jpg`;
+      filename = `star-mark-removed-${timestamp}.jpg`;
     } else {
       dataUrl = result.toDataURL('image/png');
-      filename = `watermark-removed-${timestamp}.png`;
+      filename = `star-mark-removed-${timestamp}.png`;
     }
 
     downloadImage(dataUrl, filename);
@@ -1307,7 +1307,7 @@ function downloadImage(dataUrl, filename) {
 
   document.body.removeChild(link);
 
-  console.log('[WatermarkRemover] Downloaded:', filename);
+  console.log('[StarMarkRemover] Downloaded:', filename);
 
 }
 
@@ -1468,4 +1468,4 @@ async function processAllImages() {
   showNotification(`Batch complete! Processed: ${processed}, Failed: ${errors}`);
 }
 
-console.log('Gemini Watermark Remover loaded on:', window.location.href);
+console.log('Star Mark Remover loaded on:', window.location.href);

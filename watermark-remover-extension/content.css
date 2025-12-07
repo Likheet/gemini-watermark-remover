@@ -1,4 +1,4 @@
-/* Content script styles for Gemini Watermark Remover */
+/* Content script styles for Star Mark Remover */
 
 #watermark-remover-notification {
   position: fixed;
@@ -25,6 +25,7 @@
     transform: translateX(100%);
     opacity: 0;
   }
+
   to {
     transform: translateX(0);
     opacity: 1;
