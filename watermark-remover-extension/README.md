@@ -13,9 +13,19 @@ A Chrome/Edge extension that removes AI star marks from images using MI-GAN deep
 
 ## Installation
 
-### From Source (Developer Mode)
+### Quick Install (Recommended)
 
-1. Download or clone this repository
+1. Download `star-mark-remover-extension.zip` from the releases
+2. Extract the zip file to a folder on your computer
+3. Open Chrome/Edge and go to `chrome://extensions/`
+4. Enable **"Developer mode"** (toggle in top-right corner)
+5. Click **"Load unpacked"**
+6. Select the extracted folder (the one containing `manifest.json`)
+7. The extension icon should appear in your toolbar ✓
+
+### From Source
+
+1. Clone this repository: `git clone <repo-url>`
 2. Open Chrome/Edge and go to `chrome://extensions/`
 3. Enable "Developer mode" (toggle in top-right)
 4. Click "Load unpacked"

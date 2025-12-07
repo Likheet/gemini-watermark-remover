@@ -1,31 +1,14 @@
 // Content script for Star Mark Remover
-// Handles image processing on web pages - Uses offscreen document for non-blocking processing
+// Handles image processing on web pages - Uses main thread for speed
+
+let modelSession = null;
+let isModelLoaded = false;
+let isModelLoading = false;
+let modelInputName = null;
+let modelOutputName = null;
 
 // Enable to download a visualized mask overlay for debugging
 const DEBUG_MASK_DOWNLOAD = false;
-
-// Process image using the background script's offscreen document (non-blocking)
-async function processWithWorker(imageData, width, height) {
-  return new Promise((resolve, reject) => {
-    // Convert TypedArray to regular array for message passing
-    const dataArray = Array.from(imageData);
-
-    chrome.runtime.sendMessage({
-      action: 'processInOffscreen',
-      imageData: dataArray,
-      width: width,
-      height: height
-    }, response => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
-      } else if (response.error) {
-        reject(new Error(response.error));
-      } else {
-        resolve(response);
-      }
-    });
-  });
-}
 
 
 // Check if ONNX Runtime is available (loaded via manifest)
@@ -45,7 +28,7 @@ function checkONNXRuntime() {
 
 // Load the MI-GAN model
 
-async function loadModel() {
+async function loadModel(silent = false) {
 
   if (isModelLoaded && modelSession) return;
 
@@ -71,7 +54,7 @@ async function loadModel() {
 
   try {
 
-    showNotification('Loading Masking Model...');
+    if (!silent) showNotification('Loading Masking Model...');
 
 
 
@@ -143,7 +126,7 @@ async function loadModel() {
 
     console.log('[StarMarkRemover] MI-GAN model loaded successfully!');
 
-    showNotification('AI model loaded!');
+    if (!silent) showNotification('Model ready!');
 
   } catch (error) {
 
@@ -1230,35 +1213,9 @@ async function processImage(imageUrl, options = { silent: false }) {
 
 
 
-    // Use Web Worker for non-blocking processing
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    if (!options.silent) showNotification('Removing star mark...');
 
-    const workerResult = await processWithWorker(
-      imageData.data,
-      canvas.width,
-      canvas.height
-    );
-
-    // Check if no star mark was detected
-    if (workerResult.noMask) {
-      showNotification('No star mark detected');
-      // Still return original for consistency
-    }
-
-    // Create result canvas from worker output
-    const result = document.createElement('canvas');
-    result.width = canvas.width;
-    result.height = canvas.height;
-    const resultCtx = result.getContext('2d', { willReadFrequently: true });
-
-    // Put the processed imageData back
-    const resultImageData = new ImageData(
-      new Uint8ClampedArray(workerResult.imageData),
-      canvas.width,
-      canvas.height
-    );
-    resultCtx.putImageData(resultImageData, 0, 0);
+    const result = await inpaint(canvas);
 
     // Use user preferences for compression
     const storage = await chrome.storage.local.get(['compressImage', 'compressionQuality']);
@@ -1482,3 +1439,16 @@ async function processAllImages() {
 }
 
 console.log('Star Mark Remover loaded on:', window.location.href);
+
+// Conditionally preload the model based on user setting
+// Off by default to avoid impacting users with slow PCs or limited bandwidth
+setTimeout(() => {
+  chrome.storage.local.get(['preloadModel'], (result) => {
+    if (result.preloadModel === true) {
+      // Silent preload - don't show notification
+      loadModel(true).catch(err => {
+        console.log('[StarMarkRemover] Background preload skipped:', err.message);
+      });
+    }
+  });
+}, 2000);

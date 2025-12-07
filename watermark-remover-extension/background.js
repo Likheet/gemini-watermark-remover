@@ -99,68 +99,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // Keep channel open for async response
   }
 
-  // Process image in offscreen document (for content script right-click)
-  if (message.action === 'processInOffscreen') {
-    processInOffscreen(message.imageData, message.width, message.height)
-      .then(result => sendResponse(result))
-      .catch(error => sendResponse({ error: error.message }));
-    return true; // Keep channel open for async response
-  }
-
   return false;
 });
-
-// Offscreen document management
-let offscreenCreating = null;
-
-async function ensureOffscreenDocument() {
-  // Check if offscreen document already exists
-  const existingContexts = await chrome.runtime.getContexts({
-    contextTypes: ['OFFSCREEN_DOCUMENT']
-  });
-
-  if (existingContexts.length > 0) {
-    return;
-  }
-
-  // Create offscreen document
-  if (offscreenCreating) {
-    await offscreenCreating;
-    return;
-  }
-
-  offscreenCreating = chrome.offscreen.createDocument({
-    url: 'offscreen.html',
-    reasons: ['DOM_PARSER'],
-    justification: 'Process images for star mark removal using MI-GAN'
-  });
-
-  await offscreenCreating;
-  offscreenCreating = null;
-  console.log('[Background] Offscreen document created');
-}
-
-async function processInOffscreen(imageData, width, height) {
-  await ensureOffscreenDocument();
-
-  // Send processing request to offscreen document
-  return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage({
-      type: 'processImage',
-      imageData: imageData,
-      width: width,
-      height: height
-    }, response => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
-      } else if (response.error) {
-        reject(new Error(response.error));
-      } else {
-        resolve(response);
-      }
-    });
-  });
-}
 
 // Fetch image as base64 (bypasses CORS for content script)
 async function fetchImageAsBase64(url) {
