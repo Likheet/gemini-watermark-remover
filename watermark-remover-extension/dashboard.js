@@ -105,6 +105,7 @@ function init() {
     setupSinglePage();
     setupBatchPage();
     setupManualPage();
+    setupWelcomeModal();
 }
 
 function updateStatus(status, message) {
@@ -797,20 +798,32 @@ function setupDragDrop(zone, input, handler, isBatch = false) {
             else handler(files[0]);
         }
     });
-    zone.addEventListener('click', (e) => {
-        const inUploadCard = e.target.closest('.upload-card');
-        const inBatchBanner = e.target.closest('.batch-drop-banner');
-        if ((inUploadCard || inBatchBanner) && e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT' && !e.target.closest('#manualCanvasWrapper') && !e.target.closest('#manualCanvas')) {
-            input.click();
-        }
-    });
-    input.addEventListener('change', (e) => {
-        const files = Array.from(e.target.files || []);
-        if (files.length) {
-            if (isMulti) handler(files);
-            else handler(files[0]);
-        }
-    });
+zone.addEventListener('click', (e) => {
+    const inUploadCard = e.target.closest('.upload-card');
+    const inBatchBanner = e.target.closest('.batch-drop-banner');
+    const isNotButton = e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT';
+    const isNotCanvas = !e.target.closest('#manualCanvasWrapper') && !e.target.closest('#manualCanvas');
+
+    if ((inUploadCard || inBatchBanner) && isNotButton && isNotCanvas) {
+        input.click();
+    }
+});
+input.addEventListener('change', (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length) {
+        if (isMulti) handler(files);
+        else handler(files[0]);
+    }
+    input.value = '';
+});
+}
+
+function getStatusIcon(status) {
+    if (status === 'pending') return '⏳';
+    if (status === 'processing') return '🔄';
+    if (status === 'done') return '✅';
+    if (status === 'error') return '❌';
+    return '';
 }
 
 function getImageData(file) {
@@ -821,49 +834,68 @@ function getImageData(file) {
             c.width = img.width; c.height = img.height;
             const ctx = c.getContext('2d');
             ctx.drawImage(img, 0, 0);
-            resolve({ data: ctx.getImageData(0, 0, c.width, c.height).data, width: c.width, height: c.height });
+            const data = ctx.getImageData(0, 0, img.width, img.height);
+            resolve({ data: data.data, width: img.width, height: img.height });
         };
         img.onerror = reject;
         img.src = URL.createObjectURL(file);
     });
 }
 
-function getStatusIcon(s) { return ''; }
-
-function downloadCanvas(canvas, filenameRoot) {
+function downloadCanvas(canvas, filename) {
     chrome.storage.local.get(['compressImage', 'compressionQuality'], (res) => {
+        const quality = (res.compressionQuality || 80) / 100;
+        const useJpeg = res.compressImage;
+
         const link = document.createElement('a');
-        if (res.compressImage) {
-            link.download = filenameRoot + '.jpg';
-            link.href = canvas.toDataURL('image/jpeg', (res.compressionQuality || 80) / 100);
-        } else {
-            link.download = filenameRoot + '.png';
-            link.href = canvas.toDataURL('image/png');
-        }
+        link.download = filename + (useJpeg ? '.jpg' : '.png');
+        link.href = canvas.toDataURL(useJpeg ? 'image/jpeg' : 'image/png', quality);
         link.click();
+        updateStatus('ready', 'Image Downloaded!');
     });
 }
 
-function downloadDataUrl(dataUrl, filenameRoot) {
-    chrome.storage.local.get(['compressImage', 'compressionQuality'], (res) => {
-        const link = document.createElement('a');
-        if (res.compressImage) {
-            const img = new Image();
-            img.onload = () => {
-                const c = document.createElement('canvas');
-                c.width = img.width; c.height = img.height;
-                c.getContext('2d').drawImage(img, 0, 0);
-                link.download = filenameRoot.replace(/\.[^.]+$/, '') + '.jpg';
-                link.href = c.toDataURL('image/jpeg', (res.compressionQuality || 80) / 100);
-                link.click();
-            };
-            img.src = dataUrl;
-        } else {
-            link.download = filenameRoot.replace(/\.[^.]+$/, '') + '.png';
-            link.href = dataUrl;
-            link.click();
+function downloadDataUrl(dataUrl, originalName) {
+    const link = document.createElement('a');
+    // dataUrl is already formatted by the create logic (png or jpeg)
+    // We just need to ensure extension matches
+    const isJpeg = dataUrl.startsWith('data:image/jpeg');
+    const ext = isJpeg ? '.jpg' : '.png';
+    const name = originalName.replace(/\.[^.]+$/, '') + '-cleaned' + ext;
+
+    link.href = dataUrl;
+    link.download = name;
+    link.click();
+}
+
+function setupWelcomeModal() {
+    const modal = document.getElementById('welcomeModal');
+    const closeBtn = document.getElementById('closeModalBtn');
+    const getStartedBtn = document.getElementById('getStartedBtn');
+    const checkbox = document.getElementById('dontShowAgainCheckbox');
+
+    // Check storage, default is show
+    chrome.storage.local.get(['hideWelcomeModal'], (res) => {
+        if (!res.hideWelcomeModal) {
+            modal.classList.remove('hidden');
         }
     });
+
+    function closeModal() {
+        if (checkbox.checked) {
+            chrome.storage.local.set({ hideWelcomeModal: true });
+        }
+        modal.classList.add('hidden');
+    }
+
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    if (getStartedBtn) getStartedBtn.addEventListener('click', closeModal);
+
+    // Close on overlay click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+    });
 }
 
+// Start
 init();

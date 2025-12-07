@@ -30,6 +30,10 @@
             padding: 0;
         }
 
+        .hidden {
+            display: none !important;
+        }
+
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background: var(--bg);
@@ -462,6 +466,11 @@
             overflow: hidden;
         }
 
+        .placeholder-text {
+            width: 100%;
+            text-align: center;
+        }
+
         .loading-orb {
             position: absolute;
             left: 50%;
@@ -691,12 +700,155 @@
         .github-link:hover {
             color: var(--text);
         }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 1;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+            display: none;
+        }
+
+        .modal-content {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            transform: translateY(0);
+            transition: transform 0.3s ease;
+            overflow: hidden;
+            animation: modalPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes modalPop {
+            from {
+                transform: translateY(20px) scale(0.95);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0) scale(1);
+                opacity: 1;
+            }
+        }
+
+        .modal-header {
+            padding: 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text);
+            margin: 0;
+        }
+
+        .close-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 24px;
+            cursor: pointer;
+            line-height: 1;
+        }
+
+        .close-btn:hover {
+            color: var(--text);
+        }
+
+        .modal-body {
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .feature-item {
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+        }
+
+        .feature-icon {
+            font-size: 24px;
+            background: rgba(59, 130, 246, 0.1);
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .feature-text strong {
+            display: block;
+            color: var(--text);
+            margin-bottom: 4px;
+            font-size: 15px;
+        }
+
+        .feature-text p {
+            color: var(--text-muted);
+            font-size: 13px;
+            line-height: 1.4;
+            margin: 0;
+        }
+
+        .modal-footer {
+            padding: 20px 24px;
+            background: rgba(0, 0, 0, 0.2);
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-muted);
+            font-size: 13px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .checkbox-container input {
+            accent-color: var(--primary);
+            width: 16px;
+            height: 16px;
+        }
     </style>
 </head>
 
 <body>
     <header>
-        <h1>Star Mark Remover</h1>
+        <h1>
+            <img src="icons/new-icon.png" alt="" style="width: 48px; height: 48px; object-fit:contain;">
+            Star Mark Remover
+        </h1>
         <div style="display: flex; align-items: center; gap: 16px;">
             <a href="https://github.com/Likheet/gemini-watermark-remover" target="_blank" class="github-link"
                 title="View Source">
@@ -896,6 +1048,46 @@
     <!-- Import ONNX Runtime & JSZip -->
     <script src="lib/ort.min.js"></script>
     <script src="lib/jszip.min.js"></script>
+    <!-- Welcome Modal -->
+    <div id="welcomeModal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Welcome to Star Mark Remover!</h2>
+                <button id="closeModalBtn" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="feature-item">
+                    <div class="feature-icon">✨</div>
+                    <div class="feature-text">
+                        <strong>Single Image Mode</strong>
+                        <p>Upload one image to automatically remove star marks instantly.</p>
+                    </div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">📚</div>
+                    <div class="feature-text">
+                        <strong>Batch Processing</strong>
+                        <p>Process multiple images at once. Just drag and drop your queue!</p>
+                    </div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">🎨</div>
+                    <div class="feature-text">
+                        <strong>Manual Masking</strong>
+                        <p>Need precision? Use the brush to manually select areas to clean.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <label class="checkbox-container">
+                    <input type="checkbox" id="dontShowAgainCheckbox">
+                    <span>Do not show this again</span>
+                </label>
+                <button id="getStartedBtn" class="primary">Get Started</button>
+            </div>
+        </div>
+    </div>
+
     <script src="dashboard.js"></script>
 </body>
 

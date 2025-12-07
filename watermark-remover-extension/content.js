@@ -1235,7 +1235,7 @@ async function processImage(imageUrl, options = { silent: false }) {
 
     downloadImage(dataUrl, filename);
 
-    if (!options.silent) showNotification('Image downloaded successfully');
+    if (!options.silent) showNotification('Image downloaded successfully!');
 
 
 
