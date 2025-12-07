@@ -1,14 +1,32 @@
 // Content script for Star Mark Remover
-// Handles image processing on web pages - Ported from Python MI-GAN implementation
-
-let modelSession = null;
-let isModelLoaded = false;
-let isModelLoading = false;
-let modelInputName = null;
-let modelOutputName = null;
+// Handles image processing on web pages - Uses offscreen document for non-blocking processing
 
 // Enable to download a visualized mask overlay for debugging
 const DEBUG_MASK_DOWNLOAD = false;
+
+// Process image using the background script's offscreen document (non-blocking)
+async function processWithWorker(imageData, width, height) {
+  return new Promise((resolve, reject) => {
+    // Convert TypedArray to regular array for message passing
+    const dataArray = Array.from(imageData);
+
+    chrome.runtime.sendMessage({
+      action: 'processInOffscreen',
+      imageData: dataArray,
+      width: width,
+      height: height
+    }, response => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else if (response.error) {
+        reject(new Error(response.error));
+      } else {
+        resolve(response);
+      }
+    });
+  });
+}
+
 
 // Check if ONNX Runtime is available (loaded via manifest)
 function checkONNXRuntime() {
@@ -1212,40 +1230,35 @@ async function processImage(imageUrl, options = { silent: false }) {
 
 
 
-    if (!options.silent) showNotification('Removing star mark...');
+    // Use Web Worker for non-blocking processing
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-    const result = await inpaint(canvas);
+    const workerResult = await processWithWorker(
+      imageData.data,
+      canvas.width,
+      canvas.height
+    );
 
-    // Check if we actually did anything (inpaint returns original canvas if no mask)
-    // We can check if getContext is different or compare data, but inpaint() 
-    // prints "No mask detected" and returns input canvas.
-    // If we are in batch mode, we might not want to download untouched images?
-    // For now, consistent behavior: always download.
-
-    // Optionally download mask overlay for debugging alignment
-    if (DEBUG_MASK_DOWNLOAD && window.__lastMaskData) {
-      const { width: maskW, height: maskH, mask, imageData } = window.__lastMaskData;
-      const maskCanvas = document.createElement('canvas');
-      maskCanvas.width = maskW;
-      maskCanvas.height = maskH;
-      const maskCtx = maskCanvas.getContext('2d', { willReadFrequently: true });
-      const overlay = maskCtx.createImageData(maskW, maskH);
-      for (let i = 0; i < maskW * maskH; i++) {
-        const base = i * 4;
-        const m = mask[i];
-        overlay.data[base] = imageData[base];
-        overlay.data[base + 1] = imageData[base + 1];
-        overlay.data[base + 2] = imageData[base + 2];
-        overlay.data[base + 3] = 255;
-        if (m > 0) {
-          overlay.data[base] = Math.min(255, overlay.data[base] + 120);
-        }
-      }
-      maskCtx.putImageData(overlay, 0, 0);
-      const maskDataUrl = maskCanvas.toDataURL('image/png');
-      downloadImage(maskDataUrl, 'star-mark-debug.png');
+    // Check if no star mark was detected
+    if (workerResult.noMask) {
+      showNotification('No star mark detected');
+      // Still return original for consistency
     }
 
+    // Create result canvas from worker output
+    const result = document.createElement('canvas');
+    result.width = canvas.width;
+    result.height = canvas.height;
+    const resultCtx = result.getContext('2d', { willReadFrequently: true });
+
+    // Put the processed imageData back
+    const resultImageData = new ImageData(
+      new Uint8ClampedArray(workerResult.imageData),
+      canvas.width,
+      canvas.height
+    );
+    resultCtx.putImageData(resultImageData, 0, 0);
 
     // Use user preferences for compression
     const storage = await chrome.storage.local.get(['compressImage', 'compressionQuality']);

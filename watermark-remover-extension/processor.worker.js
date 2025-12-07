@@ -20,22 +20,58 @@ ort.env.logLevel = 'error';
 ort.env.wasm.numThreads = 1;
 
 self.onmessage = async (e) => {
-    const { type, data, config } = e.data;
+    const { type } = e.data;
     try {
         switch (type) {
-            case 'init':
-                await initModel(config.wasmPath);
+            case 'init': {
+                // Support both new format (wasmPath directly) and old format (config.wasmPath)
+                const wasmPath = e.data.wasmPath || (e.data.config && e.data.config.wasmPath);
+                await initModel(wasmPath);
+                postMessage({ type: 'ready' });
                 postMessage({ type: 'status', status: 'ready', message: 'Ready' });
                 break;
-            case 'process':
-                if (!isModelLoaded) throw new Error('Model not loaded');
+            }
+            case 'process': {
+                // Support both new format (direct props) and old format (data.*)
+                const imageData = e.data.imageData || (e.data.data && e.data.data.imageData);
+                const width = e.data.width || (e.data.data && e.data.data.width);
+                const height = e.data.height || (e.data.data && e.data.data.height);
+                const userMask = e.data.userMask || (e.data.data && e.data.data.userMask);
+
+                if (!isModelLoaded) {
+                    // Auto-initialize if not loaded
+                    await initModel();
+                }
+
                 postMessage({ type: 'status', status: 'processing', message: 'Processing image...' });
                 postMessage({ type: 'progress', percent: 20 });
-                const result = await processImage(data.imageData, data.width, data.height, data.userMask);
+
+                const result = await processImage(imageData, width, height, userMask);
+
                 postMessage({ type: 'status', status: 'processing', message: 'Finalizing...' });
                 postMessage({ type: 'progress', percent: 90 });
-                postMessage({ type: 'result', result: result, status: 'ready', message: 'Processing complete' }, [result]);
+
+                // For content.js: convert ImageBitmap to raw imageData
+                // result is now { bitmap: ImageBitmap, noMask: boolean }
+                const bitmap = result.bitmap;
+                const noMask = result.noMask;
+
+                const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(bitmap, 0, 0);
+                const outImageData = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
+                const buffer = outImageData.data.buffer.slice(0);
+                postMessage({
+                    type: 'result',
+                    imageData: buffer,
+                    width: bitmap.width,
+                    height: bitmap.height,
+                    noMask: noMask,
+                    status: 'ready',
+                    message: noMask ? 'No star mark detected' : 'Processing complete'
+                }, [buffer]);
                 break;
+            }
         }
     } catch (error) {
         console.error('Worker Error:', error);
@@ -370,7 +406,7 @@ async function processImage(inputImageData, width, height, userMask = null) {
     if (maxX === 0) {
         const c = new OffscreenCanvas(width, height);
         c.getContext('2d').putImageData(new ImageData(imageData, width, height), 0, 0);
-        return c.transferToImageBitmap();
+        return { bitmap: c.transferToImageBitmap(), noMask: true };
     }
 
     const margin = 64;
@@ -547,5 +583,5 @@ async function processImage(inputImageData, width, height, userMask = null) {
     const blendedImageData = new ImageData(blendedData, cropW, cropH);
     finalCtx.putImageData(blendedImageData, minX, minY);
 
-    return finalCanvas.transferToImageBitmap();
+    return { bitmap: finalCanvas.transferToImageBitmap(), noMask: false };
 }

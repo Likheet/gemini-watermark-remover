@@ -7,7 +7,8 @@
     "activeTab",
     "contextMenus",
     "scripting",
-    "storage"
+    "storage",
+    "offscreen"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -34,7 +35,6 @@
         "<all_urls>"
       ],
       "js": [
-        "lib/ort.min.js",
         "content.js"
       ],
       "css": [
@@ -46,7 +46,8 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "lib/*"
+        "lib/*",
+        "processor.worker.js"
       ],
       "matches": [
         "<all_urls>"

@@ -271,12 +271,17 @@ function handleSingleFile(file) {
 // --- Batch Page Logic ---
 
 function setupBatchPage() {
-    fileInputBatch.multiple = true; // Ensure multiple selection is enabled
+    // Make sure the picker truly allows multiple files (some browsers can ignore the attribute)
+    fileInputBatch.multiple = true;
+    fileInputBatch.setAttribute('multiple', 'multiple');
+
+    // Ensure the handler always receives an array of files
     setupDragDrop(dropZoneBatch, fileInputBatch, handleBatchFiles, true);  // true = batch mode
     dropZoneBatch.addEventListener('drop', (e) => {
         e.preventDefault();
         dropZoneBatch.classList.remove('drag-over');
-        if (e.dataTransfer.files.length) handleBatchFiles(e.dataTransfer.files);
+        const files = Array.from(e.dataTransfer.files || []);
+        if (files.length) handleBatchFiles(files);
     });
     // Note: change listener is already added by setupDragDrop
 
@@ -293,8 +298,9 @@ function setupBatchPage() {
 }
 
 function handleBatchFiles(fileList) {
-    console.log('[BatchDebug] Received files:', fileList.length, fileList);
-    const files = Array.from(fileList);
+    const files = Array.isArray(fileList) ? fileList : Array.from(fileList || []);
+    if (!files.length) return;
+    console.log('[BatchDebug] Received files:', files.length, files);
 
     let addedCount = 0;
     files.forEach((file, index) => { // Use index for unique ID
@@ -773,11 +779,12 @@ function setupDragDrop(zone, input, handler, isBatch = false) {
     zone.addEventListener('drop', (e) => {
         e.preventDefault();
         zone.classList.remove('drag-over');
-        if (e.dataTransfer.files.length) {
+        const files = Array.from(e.dataTransfer.files || []);
+        if (files.length) {
             if (isMulti) {
-                handler(e.dataTransfer.files);  // Pass all files for batch
+                handler(files);  // Pass all files for batch
             } else {
-                handler(e.dataTransfer.files[0]);  // Single file for other modes
+                handler(files[0]);  // Single file for other modes
             }
         }
     });
@@ -791,11 +798,12 @@ function setupDragDrop(zone, input, handler, isBatch = false) {
         }
     });
     input.addEventListener('change', (e) => {
-        if (e.target.files.length) {
+        const files = Array.from(e.target.files || []);
+        if (files.length) {
             if (isMulti) {
-                handler(e.target.files);  // Pass all files for batch
+                handler(files);  // Pass all files for batch
             } else {
-                handler(e.target.files[0]);  // Single file for other modes
+                handler(files[0]);  // Single file for other modes
             }
         }
     });
