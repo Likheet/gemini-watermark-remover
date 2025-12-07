@@ -73,6 +73,30 @@ let maskCanvas = null;
 let strokeHistory = [];      // Stores canvas states for undo
 let maskStrokeHistory = [];  // Stores mask states for undo
 
+// --- Notification Sound ---
+function playNotificationSound() {
+    try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+
+        // Pleasant "ding" sound - two quick tones
+        oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // A5 note
+        oscillator.frequency.setValueAtTime(1320, audioCtx.currentTime + 0.1); // E6 note
+
+        gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+
+        oscillator.start(audioCtx.currentTime);
+        oscillator.stop(audioCtx.currentTime + 0.3);
+    } catch (e) {
+        console.log('Audio notification not supported');
+    }
+}
+
 // --- Initialization ---
 
 function init() {
@@ -179,14 +203,26 @@ function initWorker() {
 }
 
 function handleWorkerMessage(e) {
-    const { type, status, message, result, percent } = e.data;
+    const { type, status, message, percent, imageData, width, height, noMask } = e.data;
 
     if (type === 'status') {
         updateStatus(status, message);
     } else if (type === 'progress') {
         showProgress(true, percent);
     } else if (type === 'result') {
-        handleResult(result);
+        // Worker sends raw imageData buffer, width, height - need to create ImageBitmap
+        if (imageData && width && height) {
+            const imgData = new ImageData(new Uint8ClampedArray(imageData), width, height);
+            createImageBitmap(imgData).then(bitmap => {
+                handleResult(bitmap);
+            }).catch(err => {
+                console.error('Failed to create ImageBitmap:', err);
+                updateStatus('error', 'Processing failed');
+            });
+        } else {
+            console.error('Invalid result data from worker');
+            updateStatus('error', 'Processing failed - invalid result');
+        }
     } else if (type === 'error') {
         console.error('Worker error:', message);
         updateStatus('error', 'Error: ' + message);
@@ -300,7 +336,6 @@ function setupBatchPage() {
 function handleBatchFiles(fileList) {
     const files = Array.isArray(fileList) ? fileList : Array.from(fileList || []);
     if (!files.length) return;
-    console.log('[BatchDebug] Received files:', files.length, files);
 
     let addedCount = 0;
     files.forEach((file, index) => { // Use index for unique ID
@@ -320,7 +355,6 @@ function handleBatchFiles(fileList) {
         reader.readAsDataURL(file);
     });
 
-    console.log(`[BatchDebug] Added ${addedCount} files. Queue size: ${queue.length}`);
     renderQueue();
     updateBatchUI();
 
@@ -364,11 +398,19 @@ function renderQueue() {
 function updateBatchUI() {
     processBtnBatch.disabled = isBatchProcessing || queue.filter(i => i.status === 'pending').length === 0;
 
+    // Show download buttons section when at least 1 image is done
+    const anyDone = queue.some(i => i.status === 'done');
     const allDone = queue.length > 0 && queue.every(i => i.status === 'done');
-    if (allDone) {
+
+    if (anyDone) {
         batchActions.classList.remove('hidden');
+        // Enable buttons only when there's at least one done
+        downloadAllBtn.disabled = false;
+        downloadZipBtn.disabled = false;
     } else {
         batchActions.classList.add('hidden');
+        downloadAllBtn.disabled = true;
+        downloadZipBtn.disabled = true;
     }
 }
 
@@ -438,7 +480,6 @@ function setupManualPage() {
     const manualWarningBanner = document.getElementById('manualWarningBanner');
     const closeManualWarning = document.getElementById('closeManualWarning');
 
-    // Check if previously dismissed (using localStorage for UI state)
     if (!localStorage.getItem('manualWarningDismissed')) {
         manualWarningBanner.classList.remove('hidden');
     }
@@ -456,19 +497,11 @@ function setupManualPage() {
     manualCanvas.addEventListener('mousedown', startDrawing);
     manualCanvas.addEventListener('mousemove', (e) => {
         draw(e);
-        // Update brush cursor position and size
         if (brushCursor && manualImgHelper) {
             const wrapperRect = manualCanvasWrapper.getBoundingClientRect();
-            const canvasRect = manualCanvas.getBoundingClientRect();
-            const size = parseInt(brushSizeInput.value);
-            // Scale brush size to match displayed canvas size
-            const scale = canvasRect.width / manualCanvas.width;
-            const displaySize = size * scale;
-            brushCursor.style.width = displaySize + 'px';
-            brushCursor.style.height = displaySize + 'px';
-            // Position relative to wrapper, accounting for canvas offset within wrapper
-            brushCursor.style.left = (canvasRect.left - wrapperRect.left + e.clientX - canvasRect.left) + 'px';
-            brushCursor.style.top = (canvasRect.top - wrapperRect.top + e.clientY - canvasRect.top) + 'px';
+            // Cursor position relative to wrapper top-left
+            brushCursor.style.left = (e.clientX - wrapperRect.left) + 'px';
+            brushCursor.style.top = (e.clientY - wrapperRect.top) + 'px';
         }
     });
     manualCanvas.addEventListener('mouseup', stopDrawing);
@@ -480,56 +513,46 @@ function setupManualPage() {
         if (brushCursor && manualImgHelper) brushCursor.style.display = 'block';
     });
 
-    // Update cursor size when slider changes
+    // Update cursor size
     brushSizeInput.addEventListener('input', () => {
         if (brushCursor && manualImgHelper) {
-            const canvasRect = manualCanvas.getBoundingClientRect();
-            const size = parseInt(brushSizeInput.value);
-            const scale = canvasRect.width / manualCanvas.width;
-            brushCursor.style.width = (size * scale) + 'px';
-            brushCursor.style.height = (size * scale) + 'px';
+            const clientWidth = manualCanvas.clientWidth;
+            const ratio = clientWidth / manualCanvas.width;
+            const size = parseInt(brushSizeInput.value) * ratio;
+            brushCursor.style.width = size + 'px';
+            brushCursor.style.height = size + 'px';
         }
     });
 
-    // Undo last stroke
     undoMaskBtn.addEventListener('click', () => {
         if (strokeHistory.length === 0 || !manualImgHelper) return;
         const prevCanvas = strokeHistory.pop();
         const prevMask = maskStrokeHistory.pop();
-
         manualCtx.putImageData(prevCanvas, 0, 0);
         if (manualMaskCtx && prevMask) {
             manualMaskCtx.putImageData(prevMask, 0, 0);
         }
     });
 
-    // Fullscreen toggle
     fullscreenBtn.addEventListener('click', () => {
         const wrapper = manualCanvasWrapper;
         if (!document.fullscreenElement) {
-            wrapper.requestFullscreen().catch(err => {
-                console.log('Fullscreen error:', err);
-            });
-            fullscreenBtn.textContent = '⛶ Exit';
+            wrapper.requestFullscreen().catch(err => console.log(err));
+            fullscreenBtn.textContent = 'Exit Fullscreen';
         } else {
             document.exitFullscreen();
-            fullscreenBtn.textContent = '⛶ Fullscreen';
+            fullscreenBtn.textContent = 'Fullscreen';
         }
     });
 
-    // Listen for fullscreen change to update button text
     document.addEventListener('fullscreenchange', () => {
-        if (!document.fullscreenElement) {
-            fullscreenBtn.textContent = '⛶ Fullscreen';
-        }
+        if (!document.fullscreenElement) fullscreenBtn.textContent = 'Fullscreen';
     });
 
     clearMaskBtn.addEventListener('click', () => {
         if (!manualImgHelper) return;
-        // Save state before clear for potential undo
         strokeHistory.push(manualCtx.getImageData(0, 0, manualCanvas.width, manualCanvas.height));
         maskStrokeHistory.push(manualMaskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height));
-
         renderManualCanvas();
         if (manualMaskCtx) manualMaskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
     });
@@ -539,16 +562,11 @@ function setupManualPage() {
         manualImgHelper = null;
         manualCanvas.width = 300; manualCanvas.height = 150;
         manualCtx.clearRect(0, 0, 300, 150);
-
-        // Clear undo history
         strokeHistory = [];
         maskStrokeHistory = [];
-
         manualCanvasWrapper.classList.add('hidden');
         manualPlaceholder.classList.remove('hidden');
-
         processBtnManual.disabled = true;
-
         manualResultImg.classList.add('hidden');
         manualResultPlaceholder.classList.remove('hidden');
         downloadBtnManual.disabled = true;
@@ -557,7 +575,6 @@ function setupManualPage() {
     processBtnManual.addEventListener('click', () => {
         if (!manualFile || !maskCanvas) return;
         processBtnManual.disabled = true;
-
         const maskData = manualMaskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
         sendProcessRequest(manualFile, maskData.data, 'manual');
     });
@@ -580,19 +597,15 @@ function handleManualFile(file) {
         manualCanvasWrapper.classList.remove('hidden');
         manualPlaceholder.classList.add('hidden');
         processBtnManual.disabled = false;
-
         manualResultImg.classList.add('hidden');
         manualResultPlaceholder.classList.remove('hidden');
         downloadBtnManual.disabled = true;
-
         manualCanvas.width = img.width;
         manualCanvas.height = img.height;
-
         maskCanvas = document.createElement('canvas');
         maskCanvas.width = img.width;
         maskCanvas.height = img.height;
         manualMaskCtx = maskCanvas.getContext('2d', { willReadFrequently: true });
-
         renderManualCanvas();
     };
     img.src = URL.createObjectURL(file);
@@ -604,6 +617,16 @@ function renderManualCanvas() {
 }
 
 function getPointerPos(e) {
+    // Use offsetX/Y for coordinate relative to element padding box
+    if (typeof e.offsetX === 'number') {
+        const ratioX = manualCanvas.width / manualCanvas.clientWidth;
+        const ratioY = manualCanvas.height / manualCanvas.clientHeight;
+        return {
+            x: e.offsetX * ratioX,
+            y: e.offsetY * ratioY
+        };
+    }
+    // Fallback
     const rect = manualCanvas.getBoundingClientRect();
     const scaleX = manualCanvas.width / rect.width;
     const scaleY = manualCanvas.height / rect.height;
@@ -614,29 +637,22 @@ function getPointerPos(e) {
 }
 
 function startDrawing(e) {
-    e.stopPropagation(); // Prevent opening file picker
+    e.stopPropagation();
     if (!manualImgHelper) return;
-
-    // Save state before starting new stroke (for undo)
     strokeHistory.push(manualCtx.getImageData(0, 0, manualCanvas.width, manualCanvas.height));
     maskStrokeHistory.push(manualMaskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height));
-
-    // Limit history to 20 strokes to avoid memory issues
     if (strokeHistory.length > 20) {
         strokeHistory.shift();
         maskStrokeHistory.shift();
     }
-
     isDrawing = true;
     const { x, y } = getPointerPos(e);
-    lastX = x;
-    lastY = y;
+    lastX = x; lastY = y;
 }
 
 function draw(e) {
     if (!isDrawing || !manualImgHelper) return;
     const { x, y } = getPointerPos(e);
-
     const size = parseInt(brushSizeInput.value);
 
     manualCtx.beginPath();
@@ -654,23 +670,17 @@ function draw(e) {
     manualMaskCtx.lineWidth = size;
     manualMaskCtx.lineCap = 'round';
     manualMaskCtx.stroke();
-
-    lastX = x;
-    lastY = y;
+    lastX = x; lastY = y;
 }
 
-function stopDrawing() {
-    isDrawing = false;
-}
+function stopDrawing() { isDrawing = false; }
 
 // --- Generic Processing ---
 
 async function sendProcessRequest(file, maskDataOrNull, mode) {
     updateStatus('processing', 'Loading image...');
-
     try {
         const imageDataObj = await getImageData(file);
-
         const payload = {
             type: 'process',
             data: {
@@ -680,12 +690,9 @@ async function sendProcessRequest(file, maskDataOrNull, mode) {
                 userMask: maskDataOrNull ? maskDataOrNull : undefined
             }
         };
-
         const transfer = [imageDataObj.data.buffer];
         if (maskDataOrNull) transfer.push(maskDataOrNull.buffer);
-
         worker.postMessage(payload, transfer);
-
     } catch (e) {
         console.error(e);
         updateStatus('error', 'Processing failed');
@@ -700,14 +707,18 @@ async function sendProcessRequest(file, maskDataOrNull, mode) {
 function processBatchQueue() {
     if (isBatchProcessing) return;
     const nextItem = queue.find(i => i.status === 'pending');
-    if (!nextItem) { updateStatus('ready', 'Batch Complete!'); return; }
-
+    if (!nextItem) {
+        updateStatus('ready', 'Batch Complete!');
+        updateBatchUI();
+        // Play notification sound when batch is complete
+        playNotificationSound();
+        return;
+    }
     isBatchProcessing = true;
     currentBatchId = nextItem.id;
     nextItem.status = 'processing';
     renderQueue();
     updateBatchUI();
-
     sendProcessRequest(nextItem.file, null, 'batch');
 }
 
@@ -716,64 +727,65 @@ function handleBatchError(msg) {
     if (item) item.status = 'error';
     isBatchProcessing = false;
     renderQueue();
-    setTimeout(processBatchQueue, 500); // Continue
+    setTimeout(processBatchQueue, 500);
 }
 
 function handleResult(bitmap) {
+    // Defensive check: ensure bitmap is valid before processing
+    if (!bitmap || typeof bitmap.width !== 'number') {
+        console.error('handleResult: Invalid bitmap received', bitmap);
+        updateStatus('error', 'Processing failed - invalid result');
+        if (currentPage === 'batch') {
+            handleBatchError('Invalid result received');
+        } else if (currentPage === 'single') {
+            processBtnSingle.disabled = false;
+        } else if (currentPage === 'manual') {
+            processBtnManual.disabled = false;
+        }
+        return;
+    }
+
     if (currentPage === 'single') {
         resultCanvasSingle.width = bitmap.width;
         resultCanvasSingle.height = bitmap.height;
         resultCanvasSingle.getContext('2d').drawImage(bitmap, 0, 0);
-
         resultCanvasSingle.classList.remove('hidden');
         singleResultPlaceholder.classList.add('hidden');
-
         processBtnSingle.disabled = false;
         downloadBtnSingle.disabled = false;
-
         bitmap.close();
         updateStatus('ready', 'Done!');
-
     } else if (currentPage === 'batch') {
         const cvs = document.createElement('canvas');
         cvs.width = bitmap.width; cvs.height = bitmap.height;
         cvs.getContext('2d').drawImage(bitmap, 0, 0);
         bitmap.close();
-
         const item = queue.find(i => i.id === currentBatchId);
         if (item) {
             item.status = 'done';
-            item.resultDataUrl = cvs.toDataURL(); // Default PNG
+            item.resultDataUrl = cvs.toDataURL();
         }
         isBatchProcessing = false;
         renderQueue();
         processBatchQueue();
-
     } else if (currentPage === 'manual') {
         const cvs = document.createElement('canvas');
         cvs.width = bitmap.width; cvs.height = bitmap.height;
         cvs.getContext('2d').drawImage(bitmap, 0, 0);
         bitmap.close();
-
         manualResultImg.src = cvs.toDataURL();
         manualResultImg.classList.remove('hidden');
         manualResultPlaceholder.classList.add('hidden');
-
         processBtnManual.disabled = false;
         downloadBtnManual.disabled = false;
         updateStatus('ready', 'Object Removed!');
     }
 }
 
-// --- Generic Processing ---
-// ... (sendProcessRequest is defined above)
-
 // --- Helpers ---
 
 function setupDragDrop(zone, input, handler, isBatch = false) {
-    // Auto-detect batch mode if input has multiple attribute
     const isMulti = isBatch || input.multiple;
-
     zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('drag-over'); });
     zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
     zone.addEventListener('drop', (e) => {
@@ -781,16 +793,11 @@ function setupDragDrop(zone, input, handler, isBatch = false) {
         zone.classList.remove('drag-over');
         const files = Array.from(e.dataTransfer.files || []);
         if (files.length) {
-            if (isMulti) {
-                handler(files);  // Pass all files for batch
-            } else {
-                handler(files[0]);  // Single file for other modes
-            }
+            if (isMulti) handler(files);
+            else handler(files[0]);
         }
     });
     zone.addEventListener('click', (e) => {
-        // Allow click if it's within the upload-card OR the batch-drop-banner
-        // and NOT on a button or input.
         const inUploadCard = e.target.closest('.upload-card');
         const inBatchBanner = e.target.closest('.batch-drop-banner');
         if ((inUploadCard || inBatchBanner) && e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT' && !e.target.closest('#manualCanvasWrapper') && !e.target.closest('#manualCanvas')) {
@@ -800,11 +807,8 @@ function setupDragDrop(zone, input, handler, isBatch = false) {
     input.addEventListener('change', (e) => {
         const files = Array.from(e.target.files || []);
         if (files.length) {
-            if (isMulti) {
-                handler(files);  // Pass all files for batch
-            } else {
-                handler(files[0]);  // Single file for other modes
-            }
+            if (isMulti) handler(files);
+            else handler(files[0]);
         }
     });
 }
@@ -824,7 +828,7 @@ function getImageData(file) {
     });
 }
 
-function getStatusIcon(s) { return s === 'pending' ? '⏳' : s === 'processing' ? '⚙️' : s === 'done' ? '✅' : '❌'; }
+function getStatusIcon(s) { return ''; }
 
 function downloadCanvas(canvas, filenameRoot) {
     chrome.storage.local.get(['compressImage', 'compressionQuality'], (res) => {
@@ -862,5 +866,4 @@ function downloadDataUrl(dataUrl, filenameRoot) {
     });
 }
 
-// Start
 init();

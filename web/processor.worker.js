@@ -1,10 +1,14 @@
 // Image Processor Web Worker
-importScripts('lib/ort.min.js');
+// Use ort.wasm.min.js - WASM-only build that works with importScripts (no ES modules needed)
+importScripts('lib/ort.wasm.min.js');
 
 let modelSession = null;
 let isModelLoaded = false;
 let modelInputName = null;
 let modelOutputName = null;
+
+// PERFORMANCE: Cache star templates to avoid recreation for each image
+const templateCache = new Map();
 
 // Suppress "Unknown CPU vendor" logs
 const originalWarn = console.warn;
@@ -16,8 +20,22 @@ const filterFn = (args) => {
 console.warn = function (...args) { if (!filterFn(args)) originalWarn.apply(console, args); };
 console.log = function (...args) { if (!filterFn(args)) originalLog.apply(console, args); };
 
+// Configure ONNX Runtime BEFORE any initialization for MAXIMUM PERFORMANCE
 ort.env.logLevel = 'error';
+
+// PERFORMANCE: Enable SIMD for ~4x faster AI inference
+// SIMD uses CPU vector instructions to process multiple data points simultaneously
+ort.env.wasm.simd = true;
+
+// Keep single-threaded to avoid lag spikes on the main thread
+// Multi-threading can cause resource contention on lower-end devices
 ort.env.wasm.numThreads = 1;
+
+// Disable proxy to avoid overhead
+ort.env.wasm.proxy = false;
+
+// Set wasm paths early
+ort.env.wasm.wasmPaths = 'lib/';
 
 self.onmessage = async (e) => {
     const { type, data, config } = e.data;
@@ -47,13 +65,22 @@ async function initModel(wasmPath) {
     if (isModelLoaded) return;
     if (wasmPath) ort.env.wasm.wasmPaths = wasmPath;
     const modelUrl = 'https://huggingface.co/lxfater/inpaint-web/resolve/main/migan.onnx';
-    modelSession = await ort.InferenceSession.create(modelUrl, { executionProviders: ['webgpu', 'wasm'], graphOptimizationLevel: 'all' });
+    // Use only 'wasm' backend - WebGPU requires ES modules which don't work in Web Workers
+    modelSession = await ort.InferenceSession.create(modelUrl, {
+        executionProviders: ['wasm'],
+        graphOptimizationLevel: 'all'
+    });
     modelInputName = modelSession.inputNames[0];
     modelOutputName = modelSession.outputNames[0];
     isModelLoaded = true;
 }
 
 function createStarTemplate(size = 48) {
+    // PERFORMANCE: Return cached template if available
+    if (templateCache.has(size)) {
+        return templateCache.get(size);
+    }
+
     const canvas = new OffscreenCanvas(size, size);
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const center = size / 2;
@@ -71,7 +98,14 @@ function createStarTemplate(size = 48) {
     }
     ctx.closePath();
     ctx.fill();
-    return ctx.getImageData(0, 0, size, size);
+    const template = ctx.getImageData(0, 0, size, size);
+
+    // Cache for reuse (limit cache size to prevent memory issues)
+    if (templateCache.size < 20) {
+        templateCache.set(size, template);
+    }
+
+    return template;
 }
 
 function resizeTemplate(template, newSize) {

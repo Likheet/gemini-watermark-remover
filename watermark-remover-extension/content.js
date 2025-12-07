@@ -1289,57 +1289,32 @@ function showNotification(message) {
   const existing = document.getElementById('watermark-remover-notification');
   if (existing) existing.remove();
 
-  // Determine if success message for green tick
+  // Determine if success/error for styling
   const isSuccess = message.toLowerCase().includes('successfully') || message.toLowerCase().includes('done') || message.toLowerCase().includes('complete');
+  const isError = message.toLowerCase().includes('failed') || message.toLowerCase().includes('error');
 
   const notification = document.createElement('div');
   notification.id = 'watermark-remover-notification';
 
-  // SVG Checkmark
-  const iconHtml = isSuccess ?
-    `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-right: 12px; flex-shrink: 0;">
-        <path d="M12 22C17.5 22 22 17.5 22 12C22 6.5 17.5 2 12 2C6.5 2 2 6.5 2 12C2 17.5 6.5 22 12 22Z" fill="#22c55e" fill-opacity="0.2"/>
-        <path d="M7.75 11.9999L10.58 14.8299L16.25 9.16992" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-     </svg>` : '';
+  if (isSuccess) notification.setAttribute('data-type', 'success');
+  if (isError) notification.setAttribute('data-type', 'error');
 
-  notification.innerHTML = `<div style="display:flex; align-items:center;">${iconHtml}<span>${message}</span></div>`;
-
-  // Modern, Minimalist "Vercel-like" Design
-  notification.style.cssText = `
-    position: fixed;
-    bottom: 24px;
-    right: 24px;
-    padding: 12px 16px;
-    background: #171717; /* Solid dark grey/black */
-    color: #ededed;
-    border: 1px solid #333333;
-    border-radius: 8px;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    font-size: 13px;
-    letter-spacing: -0.01em;
-    font-weight: 500;
-    z-index: 2147483647; /* Max Z-index */
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    display: flex;
-    align-items: center;
-    opacity: 0;
-    transform: translateY(10px);
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  // No icons/emojis as per user request
+  notification.innerHTML = `
+    <div style="display:flex; align-items:center;">
+      <span>${message}</span>
+    </div>
   `;
 
-  document.body.appendChild(notification);
+  // Note: Styles are handled in content.css
 
-  // Animate in
-  requestAnimationFrame(() => {
-    notification.style.opacity = '1';
-    notification.style.transform = 'translateY(0)';
-  });
+  document.body.appendChild(notification);
 
   // Animate out
   setTimeout(() => {
     notification.style.opacity = '0';
-    notification.style.transform = 'translateY(4px)';
-    setTimeout(() => notification.remove(), 200);
+    notification.style.transform = 'translateY(10px) scale(0.95)';
+    setTimeout(() => notification.remove(), 400);
   }, 4000);
 }
 

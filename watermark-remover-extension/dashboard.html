@@ -5,17 +5,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Star Mark Remover Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #121212;
-            --surface: #1e1e1e;
-            --surface-hover: #2a2a2a;
-            --border: #333;
-            --text: #e0e0e0;
-            --text-muted: #888;
-            --primary: #ffffff;
-            --primary-fg: #000000;
-            --accent: #3b82f6;
+            --bg: #09090b;
+            --surface: #18181b;
+            --surface-hover: #27272a;
+            --border: #27272a;
+            --text: #e4e4e7;
+            --text-muted: #a1a1aa;
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --primary-fg: #ffffff;
+            --accent-gradient: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
             --error: #ef4444;
             --success: #10b981;
         }
@@ -27,7 +31,7 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background: var(--bg);
             color: var(--text);
             font-size: 14px;
@@ -36,10 +40,11 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            -webkit-font-smoothing: antialiased;
         }
 
         header {
-            padding: 24px;
+            padding: 20px 24px;
             border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
@@ -50,8 +55,13 @@
         header h1 {
             font-size: 16px;
             font-weight: 600;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
+            letter-spacing: -0.01em;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
         /* Nav Bar */
@@ -61,7 +71,7 @@
             background: var(--surface);
             border-bottom: 1px solid var(--border);
             padding: 0 20px;
-            gap: 20px;
+            gap: 8px;
         }
 
         .nav-btn {
@@ -69,11 +79,12 @@
             border: none;
             border-bottom: 2px solid transparent;
             color: var(--text-muted);
-            padding: 16px 24px;
-            font-size: 14px;
+            padding: 16px 20px;
+            font-size: 13px;
             font-weight: 500;
             cursor: pointer;
             transition: all 0.2s;
+            position: relative;
         }
 
         .nav-btn:hover {
@@ -82,7 +93,17 @@
 
         .nav-btn.active {
             color: var(--primary);
-            border-bottom-color: var(--primary);
+        }
+
+        .nav-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: var(--accent-gradient);
+            border-radius: 2px 2px 0 0;
         }
 
         /* Status & Progress */
@@ -90,16 +111,17 @@
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            padding: 4px 12px;
+            padding: 6px 12px;
             background: var(--surface);
             border: 1px solid var(--border);
             border-radius: 99px;
             font-size: 12px;
+            font-weight: 500;
         }
 
         .status-dot {
-            width: 8px;
-            height: 8px;
+            width: 6px;
+            height: 6px;
             border-radius: 50%;
             background: var(--text-muted);
         }
@@ -137,52 +159,50 @@
             transition: opacity 0.3s;
         }
 
-
-
         /* Upload Card Styles */
         .upload-card {
-            background: #09090b;
-            border: 1px solid #27272a;
-            border-radius: 12px;
-            padding: 24px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 32px;
             width: 90%;
-            height: 90%;
+            height: auto;
             display: flex;
             flex-direction: column;
-            gap: 16px;
-            max-width: 600px;
-            max-height: 600px;
+            gap: 20px;
+            max-width: 500px;
             pointer-events: auto;
-            /* Re-enable interactions blocked by .full-center */
             position: relative;
             z-index: 10;
+            box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.5);
         }
 
         .upload-card-header h3 {
-            color: #fff;
-            font-size: 16px;
+            color: var(--text);
+            font-size: 18px;
             font-weight: 600;
             margin: 0 0 4px 0;
+            text-align: center;
         }
 
         .upload-card-header p {
-            color: #71717a;
-            font-size: 12px;
+            color: var(--text-muted);
+            font-size: 13px;
             margin: 0;
+            text-align: center;
         }
 
         .upload-area {
             flex: 1;
-            /* Initial: Dashed, low opacity grey */
-            border: 1px dashed rgba(255, 255, 255, 0.2);
-            border-radius: 8px;
-            background: #09090b;
+            min-height: 200px;
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.2);
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 12px;
-            /* Timing: 0.3s ease */
+            gap: 16px;
             transition: all 0.3s ease;
             cursor: pointer;
             position: relative;
@@ -191,66 +211,45 @@
 
         .upload-area:hover,
         .upload-area.drag-over {
-            /* Hover: Solid, Bright White */
-            border: 1px solid #ffffff;
-            /* Spotlight effect + Nav-like highlight */
-            background: #000;
-            color: #fff;
-            /* Match nav-btn hover text color shift if applicable */
-        }
-
-        /* Pseudo-element for smooth spotlight fade */
-        .upload-area::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: radial-gradient(circle at center, rgba(255, 255, 255, 0.08) 0%, transparent 70%);
-            opacity: 0;
-            transition: opacity 0.3s ease;
-            pointer-events: none;
-        }
-
-        .upload-area:hover::before,
-        .upload-area.drag-over::before {
-            opacity: 1;
+            border-color: var(--primary);
+            background: rgba(59, 130, 246, 0.05);
         }
 
         .upload-icon {
-            width: 48px;
-            height: 48px;
-            background: #18181b;
+            width: 56px;
+            height: 56px;
+            background: var(--surface-hover);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: #e4e4e7;
-            position: relative;
-            z-index: 2;
+            color: var(--text);
+            transition: transform 0.2s;
+        }
+
+        .upload-area:hover .upload-icon {
+            transform: scale(1.1);
+            color: var(--primary);
         }
 
         .upload-icon svg {
-            width: 24px;
-            height: 24px;
+            width: 28px;
+            height: 28px;
         }
 
         .upload-text {
             text-align: center;
-            position: relative;
-            z-index: 2;
         }
 
         .upload-text strong {
             display: block;
-            color: #fff;
+            color: var(--text);
             font-size: 14px;
             margin-bottom: 4px;
         }
 
         .upload-text span {
-            color: #71717a;
+            color: var(--text-muted);
             font-size: 12px;
         }
 
@@ -273,9 +272,21 @@
             left: 0;
             bottom: 0;
             width: 50%;
-            background: linear-gradient(90deg, transparent, var(--success), transparent);
+            background: var(--accent-gradient);
             animation: indeterminateSlide 1.5s infinite ease-in-out;
             transform: translateX(-150%);
+        }
+
+        @keyframes indeterminateSlide {
+            0% {
+                left: 0;
+                transform: translateX(-150%);
+            }
+
+            100% {
+                left: 100%;
+                transform: translateX(50%);
+            }
         }
 
         /* Main Content */
@@ -301,9 +312,8 @@
             display: none;
             width: 100%;
             height: 100%;
-            padding: 24px 40px;
+            padding: 24px;
             position: absolute;
-            /* Stack them */
             top: 0;
             left: 0;
         }
@@ -315,63 +325,130 @@
         /* Split View (Single/Manual) */
         #pageSingle,
         #pageManual {
-            gap: 30px;
+            gap: 20px;
             align-items: stretch;
             justify-content: center;
         }
 
         .split-view {
             display: flex;
-            gap: 24px;
+            gap: 20px;
             height: 100%;
             width: 100%;
-            max-height: 80vh;
-            /* Keep within view */
         }
 
         .pane {
             flex: 1;
             background: #000;
-            border-radius: 12px;
+            border-radius: 16px;
             border: 1px solid var(--border);
             display: flex;
             flex-direction: column;
             overflow: hidden;
             position: relative;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
         }
 
         .pane-header {
-            padding: 12px 16px;
-            background: rgba(255, 255, 255, 0.05);
+            padding: 14px 20px;
+            background: var(--surface);
             border-bottom: 1px solid var(--border);
-            font-size: 14px;
-            font-weight: 500;
+            font-size: 13px;
+            font-weight: 600;
             color: var(--text-muted);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
 
         .pane-content {
             flex: 1;
             position: relative;
             background: #0f0f0f;
+            /* Darker than surface for contrast */
             overflow: hidden;
             display: flex;
             align-items: center;
             justify-content: center;
+            background-image: radial-gradient(#1f1f1f 1px, transparent 1px);
+            background-size: 20px 20px;
         }
 
         .pane-controls {
-            padding: 16px;
+            padding: 16px 20px;
             border-top: 1px solid var(--border);
             display: flex;
             justify-content: flex-end;
-            gap: 10px;
+            gap: 12px;
             background: var(--surface);
         }
 
-        /* Generic Center Placeholder */
+        /* Buttons & Inputs */
+        button {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--button-bg, transparent);
+            color: var(--text);
+            font-weight: 500;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        button:hover:not(:disabled) {
+            background: var(--surface-hover);
+            border-color: #52525b;
+            transform: translateY(-1px);
+        }
+
+        button:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        /* Primary Button */
+        button.primary {
+            background: var(--accent-gradient);
+            color: #fff;
+            border: none;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+
+        button.primary:hover:not(:disabled) {
+            background: var(--accent-gradient);
+            /* Keep gradient */
+            filter: brightness(110%);
+            box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+            border: none;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .btn-text {
+            border: none;
+            padding: 6px 12px;
+            color: var(--text-muted);
+            background: transparent;
+        }
+
+        .btn-text:hover {
+            color: var(--text);
+            background: rgba(255, 255, 255, 0.05);
+            border: none;
+        }
+
+        /* ... existing specialized classes ... */
+
         .full-center {
             width: 100%;
             height: 100%;
@@ -385,7 +462,6 @@
             overflow: hidden;
         }
 
-        /* Processing Orb State */
         .loading-orb {
             position: absolute;
             left: 50%;
@@ -396,7 +472,6 @@
             border-radius: 50%;
             z-index: 1;
             display: none;
-            /* Container for the effect */
         }
 
         .full-center.loading .loading-orb {
@@ -404,7 +479,7 @@
             animation: orbBreathe 3s ease-in-out infinite;
         }
 
-        /* The glowing swirling gradient */
+        /* Orb Styles */
         .loading-orb::after {
             content: '';
             position: absolute;
@@ -413,18 +488,12 @@
             right: 0;
             bottom: 0;
             border-radius: 50%;
-            background: conic-gradient(from 0deg,
-                    #000000,
-                    #4b0082,
-                    #ff00ff,
-                    #4b0082,
-                    #000000);
-            filter: blur(20px);
+            background: conic-gradient(from 0deg, #3b82f6, #8b5cf6, #ec4899, #3b82f6);
+            filter: blur(25px);
             opacity: 0.8;
             animation: orbSpin 2s linear infinite;
         }
 
-        /* Animations */
         @keyframes orbSpin {
             0% {
                 transform: rotate(0deg);
@@ -433,108 +502,6 @@
             100% {
                 transform: rotate(360deg);
             }
-        }
-
-        /* Image/Canvas display */
-        .preview-img-full {
-            max-width: 100%;
-            max-height: 100%;
-            object-fit: contain;
-            display: block;
-        }
-
-        /* Manual Canvas Styling */
-        #manualCanvasWrapper {
-            pointer-events: auto;
-            overflow: auto;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        #manualCanvas {
-            max-width: 100%;
-            max-height: 100%;
-            object-fit: contain;
-            display: block;
-            cursor: none;
-        }
-
-        .hidden {
-            display: none !important;
-        }
-
-        /* Buttons & Inputs */
-        button {
-            padding: 10px 20px;
-            border-radius: 6px;
-            border: 1px solid var(--border);
-            background: var(--surface);
-            color: var(--text);
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        button:hover:not(:disabled) {
-            background: var(--surface-hover);
-            border-color: #555;
-        }
-
-        /* Ensure text is on top */
-        .placeholder-text {
-            position: relative;
-            z-index: 10;
-            font-weight: 500;
-        }
-
-        .breathing-text {
-            /* Darker text gradient as requested */
-            background: linear-gradient(110deg, rgba(255, 255, 255, 0.4) 30%, #a1a1aa 50%, rgba(255, 255, 255, 0.4) 70%);
-            background-size: 200% 100%;
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
-            color: transparent;
-            animation: shimmerText 2.5s linear infinite;
-        }
-
-        @keyframes shimmerText {
-            0% {
-                background-position: 200% 0;
-            }
-
-            100% {
-                background-position: -200% 0;
-            }
-        }
-
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        button.primary {
-            background: var(--primary);
-            color: var(--primary-fg);
-            border-color: var(--primary);
-        }
-
-        button.primary:hover:not(:disabled) {
-            background: #ccc;
-        }
-
-        .btn-text {
-            background: transparent;
-            border: none;
-            padding: 4px 8px;
-            font-size: 12px;
-            color: var(--text-muted);
-        }
-
-        .btn-text:hover {
-            color: var(--text);
-            background: transparent;
         }
 
         /* Batch Mode Styles */
@@ -691,15 +658,59 @@
             color: #fef08a;
             background: rgba(255, 255, 255, 0.1);
         }
+
+        /* Center the manual upload card - use absolute positioning to fill parent */
+        #pageManual #dropZoneManual {
+            position: relative !important;
+        }
+
+        #pageManual #manualPlaceholder {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+
+        #pageManual #manualPlaceholder .upload-card {
+            margin: 0 !important;
+        }
+
+        .github-link {
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            transition: color 0.2s;
+        }
+
+        .github-link:hover {
+            color: var(--text);
+        }
     </style>
 </head>
 
 <body>
     <header>
         <h1>Star Mark Remover</h1>
-        <div class="status-badge">
-            <div id="statusDot" class="status-dot"></div>
-            <span id="statusText">Ready</span>
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <a href="https://github.com/Likheet/gemini-watermark-remover" target="_blank" class="github-link"
+                title="View Source">
+                <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path
+                        d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22">
+                    </path>
+                </svg>
+            </a>
+            <div class="status-badge">
+                <div id="statusDot" class="status-dot"></div>
+                <span id="statusText">Ready</span>
+            </div>
         </div>
     </header>
 
@@ -818,15 +829,15 @@
                         <div class="header-tools">
                             <span class="tool-lbl">Brush</span>
                             <input type="range" id="brushSize" min="5" max="100" value="20" style="width:80px;">
-                            <button id="undoMaskBtn" class="btn-text" title="Undo last stroke">↩ Undo</button>
+                            <button id="undoMaskBtn" class="btn-text" title="Undo last stroke">Undo</button>
                             <button id="clearMaskBtn" class="btn-text" style="color:#ef4444;">Clear</button>
-                            <button id="fullscreenBtn" class="btn-text" title="Enter fullscreen">⛶ Fullscreen</button>
-                            <button id="resetManualBtn" class="btn-text">New</button>
+                            <button id="fullscreenBtn" class="btn-text" title="Enter fullscreen">Fullscreen</button>
                         </div>
                     </div>
                     <div class="pane-content" id="dropZoneManual">
-                        <div class="full-center" id="manualPlaceholder">
-                            <div class="upload-card">
+                        <div class="full-center" id="manualPlaceholder"
+                            style="justify-content: center; align-items: center; display: flex; width: 100%;">
+                            <div class="upload-card" style="margin: auto;">
                                 <div class="upload-card-header">
                                     <h3>Image Upload</h3>
                                     <p>Supported formats: JPG, PNG, GIF</p>
@@ -851,14 +862,15 @@
                         </div>
                         <!-- Canvas Wrapper for Manual drawing -->
                         <div id="manualCanvasWrapper" class="full-center hidden"
-                            style="width:100%; height:100%; position:relative;">
-                            <canvas id="manualCanvas"></canvas>
+                            style="width:100%; height:100%; position:relative; cursor: none;">
+                            <canvas id="manualCanvas" style="max-width: 100%; max-height: 100%; cursor: none;"></canvas>
                             <!-- Brush cursor indicator -->
                             <div id="brushCursor" class="brush-cursor"></div>
                         </div>
                         <input type="file" id="fileInputManual" accept="image/*" hidden>
                     </div>
-                    <div class="pane-controls">
+                    <div class="pane-controls" style="justify-content: space-between;">
+                        <button id="resetManualBtn" title="Reset and start new">New</button>
                         <button id="processBtnManual" class="primary" disabled>Remove Object</button>
                     </div>
                 </div>

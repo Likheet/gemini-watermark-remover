@@ -60,6 +60,7 @@ let singleFile = null;
 let queue = [];
 let isBatchProcessing = false;
 let currentBatchId = null;
+let preloadedImageData = null;  // Pre-loaded next image for faster batch processing
 
 // Manual State
 let manualFile = null;
@@ -72,6 +73,30 @@ let manualMaskCtx = null;
 let maskCanvas = null;
 let strokeHistory = [];      // Stores canvas states for undo
 let maskStrokeHistory = [];  // Stores mask states for undo
+
+// --- Notification Sound ---
+function playNotificationSound() {
+    try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+
+        // Pleasant "ding" sound - two quick tones
+        oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // A5 note
+        oscillator.frequency.setValueAtTime(1320, audioCtx.currentTime + 0.1); // E6 note
+
+        gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+
+        oscillator.start(audioCtx.currentTime);
+        oscillator.stop(audioCtx.currentTime + 0.3);
+    } catch (e) {
+        console.log('Audio notification not supported');
+    }
+}
 
 // --- Initialization ---
 
@@ -362,11 +387,19 @@ function renderQueue() {
 function updateBatchUI() {
     processBtnBatch.disabled = isBatchProcessing || queue.filter(i => i.status === 'pending').length === 0;
 
+    // Show download buttons section when at least 1 image is done
+    const anyDone = queue.some(i => i.status === 'done');
     const allDone = queue.length > 0 && queue.every(i => i.status === 'done');
-    if (allDone) {
+
+    if (anyDone) {
         batchActions.classList.remove('hidden');
+        // Enable buttons only when there's at least one done
+        downloadAllBtn.disabled = false;
+        downloadZipBtn.disabled = false;
     } else {
         batchActions.classList.add('hidden');
+        downloadAllBtn.disabled = true;
+        downloadZipBtn.disabled = true;
     }
 }
 
@@ -663,7 +696,15 @@ async function sendProcessRequest(file, maskDataOrNull, mode) {
     updateStatus('processing', 'Loading image...');
 
     try {
-        const imageDataObj = await getImageData(file);
+        let imageDataObj;
+
+        // PERFORMANCE: Use pre-loaded image data if available (batch mode optimization)
+        if (mode === 'batch' && preloadedImageData && preloadedImageData.id === currentBatchId) {
+            imageDataObj = preloadedImageData.imageData;
+            preloadedImageData = null; // Clear after use
+        } else {
+            imageDataObj = await getImageData(file);
+        }
 
         const payload = {
             type: 'process',
@@ -691,10 +732,26 @@ async function sendProcessRequest(file, maskDataOrNull, mode) {
 
 // --- Batch Processing Handlers ---
 
+// Use requestIdleCallback for non-blocking batch processing (avoids UI lag)
+const scheduleIdleTask = (callback) => {
+    if ('requestIdleCallback' in self) {
+        requestIdleCallback(callback, { timeout: 50 }); // Max 50ms wait
+    } else {
+        setTimeout(callback, 0); // Fallback for Safari
+    }
+};
+
 function processBatchQueue() {
     if (isBatchProcessing) return;
     const nextItem = queue.find(i => i.status === 'pending');
-    if (!nextItem) { updateStatus('ready', 'Batch Complete!'); return; }
+    if (!nextItem) {
+        updateStatus('ready', 'Batch Complete!');
+        preloadedImageData = null;
+        updateBatchUI();
+        // Play notification sound when batch is complete
+        playNotificationSound();
+        return;
+    }
 
     isBatchProcessing = true;
     currentBatchId = nextItem.id;
@@ -702,7 +759,29 @@ function processBatchQueue() {
     renderQueue();
     updateBatchUI();
 
+    // Pre-load next image in background while this one processes
+    preloadNextBatchImage();
+
     sendProcessRequest(nextItem.file, null, 'batch');
+}
+
+// Pre-load next image in queue for faster batch processing
+async function preloadNextBatchImage() {
+    const pendingItems = queue.filter(i => i.status === 'pending');
+    if (pendingItems.length === 0) {
+        preloadedImageData = null;
+        return;
+    }
+
+    const nextItem = pendingItems[0];
+    try {
+        preloadedImageData = {
+            id: nextItem.id,
+            imageData: await getImageData(nextItem.file)
+        };
+    } catch (e) {
+        preloadedImageData = null;
+    }
 }
 
 function handleBatchError(msg) {
@@ -714,6 +793,20 @@ function handleBatchError(msg) {
 }
 
 function handleResult(bitmap) {
+    // Defensive check: ensure bitmap is valid before processing
+    if (!bitmap || typeof bitmap.width !== 'number') {
+        console.error('handleResult: Invalid bitmap received', bitmap);
+        updateStatus('error', 'Processing failed - invalid result');
+        if (currentPage === 'batch') {
+            handleBatchError('Invalid result received');
+        } else if (currentPage === 'single') {
+            processBtnSingle.disabled = false;
+        } else if (currentPage === 'manual') {
+            processBtnManual.disabled = false;
+        }
+        return;
+    }
+
     if (currentPage === 'single') {
         resultCanvasSingle.width = bitmap.width;
         resultCanvasSingle.height = bitmap.height;
@@ -741,7 +834,8 @@ function handleResult(bitmap) {
         }
         isBatchProcessing = false;
         renderQueue();
-        setTimeout(processBatchQueue, 100);
+        // Use idle callback instead of fixed delay - processes immediately when browser is idle
+        scheduleIdleTask(processBatchQueue);
     } else if (currentPage === 'manual') {
         const cvs = document.createElement('canvas');
         cvs.width = bitmap.width; cvs.height = bitmap.height;

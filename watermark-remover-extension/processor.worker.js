@@ -16,8 +16,17 @@ const filterFn = (args) => {
 console.warn = function (...args) { if (!filterFn(args)) originalWarn.apply(console, args); };
 console.log = function (...args) { if (!filterFn(args)) originalLog.apply(console, args); };
 
+// Configure ONNX Runtime BEFORE any initialization for MAXIMUM PERFORMANCE
 ort.env.logLevel = 'error';
+
+// PERFORMANCE: Enable SIMD for ~4x faster AI inference
+ort.env.wasm.simd = true;
+
+// Keep single-threaded to avoid lag spikes
 ort.env.wasm.numThreads = 1;
+
+// Disable proxy to avoid overhead
+ort.env.wasm.proxy = false;
 
 self.onmessage = async (e) => {
     const { type } = e.data;
@@ -83,7 +92,11 @@ async function initModel(wasmPath) {
     if (isModelLoaded) return;
     if (wasmPath) ort.env.wasm.wasmPaths = wasmPath;
     const modelUrl = 'https://huggingface.co/lxfater/inpaint-web/resolve/main/migan.onnx';
-    modelSession = await ort.InferenceSession.create(modelUrl, { executionProviders: ['webgpu', 'wasm'], graphOptimizationLevel: 'all' });
+    // Use only 'wasm' backend - WebGPU requires ES modules which don't work in Web Workers
+    modelSession = await ort.InferenceSession.create(modelUrl, {
+        executionProviders: ['wasm'],
+        graphOptimizationLevel: 'all'
+    });
     modelInputName = modelSession.inputNames[0];
     modelOutputName = modelSession.outputNames[0];
     isModelLoaded = true;

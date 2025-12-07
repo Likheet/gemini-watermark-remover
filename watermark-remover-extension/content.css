@@ -4,48 +4,88 @@
   position: fixed;
   bottom: 24px;
   right: 24px;
-  background: #1e1e1e;
-  border: 1px solid #333;
-  color: #e0e0e0;
-  padding: 12px 20px;
-  border-radius: 6px;
-  font-family: -apple-system, system-ui, sans-serif;
-  font-size: 13px;
+  background: #18181b;
+  /* Zinc 900 */
+  border: 1px solid #27272a;
+  /* Zinc 800 */
+  color: #e4e4e7;
+  /* Zinc 200 */
+  padding: 16px;
+  border-radius: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 14px;
   font-weight: 500;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  z-index: 999999;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+  z-index: 2147483647;
+  /* Max z-index */
   display: flex;
   align-items: center;
-  gap: 8px;
-  animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  gap: 12px;
+  transform-origin: bottom right;
+  animation: notificationEnter 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  backdrop-filter: blur(8px);
 }
 
-@keyframes slideIn {
-  from {
-    transform: translateX(100%);
+@keyframes notificationEnter {
+  0% {
     opacity: 0;
+    transform: translateY(20px) scale(0.95);
   }
 
-  to {
-    transform: translateX(0);
+  100% {
     opacity: 1;
+    transform: translateY(0) scale(1);
   }
+}
+
+/* Success state modifier (to be applied by JS if needed, or just default style) */
+#watermark-remover-notification[data-type="success"] {
+  border-left: 4px solid #10b981;
+}
+
+#watermark-remover-notification[data-type="error"] {
+  border-left: 4px solid #ef4444;
 }
 
 /* Processing overlay */
 .watermark-remover-processing {
   position: relative;
+  overflow: hidden;
 }
 
 .watermark-remover-processing::after {
-  content: 'Processing...';
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(2px);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.watermark-remover-processing::before {
+  content: '';
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
-  padding: 8px 16px;
-  border-radius: 4px;
-  font-size: 12px;
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  z-index: 11;
+}
+
+@keyframes spin {
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
 }
